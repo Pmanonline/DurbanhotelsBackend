@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  dev_api:
+    build:
+      context: .
+      target: development
+      # args:
+      #   NODE_ENV: development
+    volumes:
+      # - ./:/app:ro
+      - /app/node_modules
+    env_file:
+      - ./.env
+    ports:
+      - 5000:5000
+    # environment:
+    #   - NODE_ENV=development
+    #   - 9229:9229 # for debugging
+    command: npm run dev
