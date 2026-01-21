@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import express, { Request, Response } from "express";
 import cors from "cors";
 import swaggerJSDOC from "swagger-jsdoc";
@@ -49,7 +48,7 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
-  })
+  }),
 );
 
 // file upload middleware
@@ -61,7 +60,7 @@ app.use(
     abortOnLimit: true,
     createParentPath: true,
     parseNested: true,
-  })
+  }),
 );
 
 app.use(cookieParser());
