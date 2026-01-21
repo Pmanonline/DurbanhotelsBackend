@@ -4,10 +4,7 @@ import { AuthenticatedRequest } from "./types";
 import { UpdateProfileBody, UpdateBankDetailsBody } from "./types";
 import IndividualUser, {
   IndividualUserDocument,
-} from "../authentication/individualUserAuth/individualUserAuth.model1";
-import OrganizationUser, {
-  organizationalDoc,
-} from "../authentication/organizationUserAuth/organizationAuth.model";
+} from "../authentication/individualUserAuth/individualUserAuth.model";
 import cloudinary from "cloudinary";
 import fs from "fs/promises";
 
@@ -76,12 +73,11 @@ const deleteFromCloudinary = async (url: string) => {
 // Types for user identification
 export interface UserIdentification {
   userId: string;
-  userType: "individual" | "organization";
-  originalUser: IndividualUserDocument | organizationalDoc;
+  originalUser: IndividualUserDocument;
 }
 
 export const identifyUserType = async (
-  req: any
+  req: any,
 ): Promise<UserIdentification | null> => {
   const tokenUser = req.user;
   const userId = tokenUser?.userData?._id || tokenUser?._id || tokenUser?.id;
@@ -97,75 +93,39 @@ export const identifyUserType = async (
       console.log("✅ User identified as Individual:", individualUser.email);
       return {
         userId: individualUser._id.toString(),
-        userType: "individual",
         originalUser: individualUser,
       };
     }
 
-    const orgUser = await OrganizationUser.findById(userId);
-    if (orgUser) {
-      console.log(
-        "✅ User identified as Organization:",
-        orgUser.organization_email || orgUser.contact_email
-      );
-      return {
-        userId: orgUser._id.toString(),
-        userType: "organization",
-        originalUser: orgUser,
-      };
-    }
-
-    console.error(
-      "❌ User not found in either Individual or Organization collections"
-    );
+    console.error("❌ User not found in Individual collection");
     return null;
   } catch (error) {
-    console.error("❌ Error identifying user type:", error);
+    console.error("❌ Error identifying user:", error);
     return null;
   }
 };
 
 // Helper function to format profile data
-const formatProfileData = (
-  user: IndividualUserDocument | organizationalDoc,
-  userType: "individual" | "organization"
-) => {
-  if (userType === "individual") {
-    const indUser = user as IndividualUserDocument;
-    return {
-      _id: indUser._id,
-      user_id: indUser._id,
-      email: indUser.email,
-      name: indUser.name,
-      phone_number: indUser.phone_number,
-      username: indUser.username || "",
-      image: indUser.image || null,
-      deals_completed: indUser.deals_completed || 0,
-      rating: indUser.rating || 0,
-      rating_count: indUser.rating_count || 0,
-    };
-  } else {
-    const orgUser = user as organizationalDoc;
-    return {
-      _id: orgUser._id,
-      user_id: orgUser._id,
-      email: orgUser.organization_email,
-      name: orgUser.organization_name,
-      phone_number: orgUser.contact_number,
-      username: "",
-      image: orgUser.image || null,
-      deals_completed: orgUser.deals_completed || 0,
-      rating: orgUser.rating || 0,
-      rating_count: orgUser.rating_count || 0,
-    };
-  }
+const formatProfileData = (user: IndividualUserDocument) => {
+  return {
+    _id: user._id,
+    user_id: user._id,
+    email: user.email,
+    name: user.name,
+    phone_number: user.phone_number,
+    username: user.username || "",
+    image: user.image || null,
+    deals_completed: user.deals_completed || 0,
+    rating: user.rating || 0,
+    rating_count: user.rating_count || 0,
+  };
 };
 
 // Get user profile
 export const getUserProfile = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -180,13 +140,7 @@ export const getUserProfile = async (
     }
 
     // Fetch user with all fields
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user) {
       const error: ErrorResponse = {
@@ -197,13 +151,12 @@ export const getUserProfile = async (
       return next(error);
     }
 
-    const profileData = formatProfileData(user, userInfo.userType);
+    const profileData = formatProfileData(user);
 
     res.status(200).json({
       status: "success",
       data: {
         profile: profileData,
-        userType: userInfo.userType,
       },
     });
   } catch (error) {
@@ -221,7 +174,7 @@ export const getUserProfile = async (
 export const updateUserProfile = async (
   req: AuthenticatedRequest<UpdateProfileBody>,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -250,28 +203,10 @@ export const updateUserProfile = async (
       return next(error);
     }
 
-    console.log(
-      `🔍 Updating profile for user: ${userInfo.userId}, Type: ${userInfo.userType}`
-    );
+    console.log(`🔍 Updating profile for user: ${userInfo.userId}`);
 
     // Find and update the user
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-      if (user) {
-        const indUser = user as IndividualUserDocument;
-        if (phone_number) indUser.phone_number = phone_number;
-        if (name) indUser.name = name;
-      }
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-      if (user) {
-        const orgUser = user as organizationalDoc;
-        if (phone_number) orgUser.contact_number = phone_number;
-        if (name) orgUser.organization_name = name;
-      }
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user) {
       const error: ErrorResponse = {
@@ -281,6 +216,10 @@ export const updateUserProfile = async (
       };
       return next(error);
     }
+
+    // Update user fields
+    if (phone_number) user.phone_number = phone_number;
+    if (name) user.name = name;
 
     // Handle profile image upload if file exists
     if (req.files && (req.files as any).image) {
@@ -307,14 +246,13 @@ export const updateUserProfile = async (
     await user.save();
     console.log("✅ Profile updated successfully");
 
-    const profileData = formatProfileData(user, userInfo.userType);
+    const profileData = formatProfileData(user);
 
     res.status(200).json({
       status: "success",
       message: "Profile updated successfully",
       data: {
         profile: profileData,
-        userType: userInfo.userType,
       },
     });
   } catch (error) {
@@ -334,7 +272,7 @@ export const updateUserProfile = async (
 export const uploadProfileImage = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -360,13 +298,7 @@ export const uploadProfileImage = async (
     const imageFile = (req.files as any).image;
 
     // Find the user
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user) {
       const error: ErrorResponse = {
@@ -414,7 +346,7 @@ export const uploadProfileImage = async (
 export const deleteProfileImage = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -429,13 +361,7 @@ export const deleteProfileImage = async (
     }
 
     // Find the user
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user || !user.image) {
       const error: ErrorResponse = {
@@ -474,7 +400,7 @@ export const deleteProfileImage = async (
 export const updateBankDetails = async (
   req: AuthenticatedRequest<UpdateBankDetailsBody>,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -499,13 +425,7 @@ export const updateBankDetails = async (
     }
 
     // Find the user
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user) {
       const error: ErrorResponse = {
@@ -531,7 +451,6 @@ export const updateBankDetails = async (
       message: "Bank details updated successfully",
       data: {
         bank_details: user.bank_details,
-        userType: userInfo.userType,
       },
     });
   } catch (error) {
@@ -549,7 +468,7 @@ export const updateBankDetails = async (
 export const getBankDetails = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userInfo = await identifyUserType(req);
@@ -564,13 +483,7 @@ export const getBankDetails = async (
     }
 
     // Find the user
-    let user: IndividualUserDocument | organizationalDoc | null;
-
-    if (userInfo.userType === "individual") {
-      user = await IndividualUser.findById(userInfo.userId);
-    } else {
-      user = await OrganizationUser.findById(userInfo.userId);
-    }
+    const user = await IndividualUser.findById(userInfo.userId);
 
     if (!user) {
       const error: ErrorResponse = {
@@ -585,7 +498,6 @@ export const getBankDetails = async (
       status: "success",
       data: {
         bank_details: user.bank_details || null,
-        userType: userInfo.userType,
       },
     });
   } catch (error) {
@@ -601,14 +513,11 @@ export const getBankDetails = async (
 
 // Helper function to get user type
 export const getUserType = async (
-  userId: string
-): Promise<"individual" | "organization" | null> => {
+  userId: string,
+): Promise<"individual" | null> => {
   try {
     const individualUser = await IndividualUser.findById(userId);
     if (individualUser) return "individual";
-
-    const orgUser = await OrganizationUser.findById(userId);
-    if (orgUser) return "organization";
 
     return null;
   } catch (error) {
