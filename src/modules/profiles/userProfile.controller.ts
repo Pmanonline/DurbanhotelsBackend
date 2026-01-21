@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from "./types";
 import { UpdateProfileBody, UpdateBankDetailsBody } from "./types";
 import IndividualUser, {
   IndividualUserDocument,
-} from "../authentication/individualUserAuth/individualUserAuth.model";
+} from "../authentication/individualUserAuth/individualUserAuth.model1";
 import cloudinary from "cloudinary";
 import fs from "fs/promises";
 
