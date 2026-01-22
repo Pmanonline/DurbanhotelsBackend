@@ -9,6 +9,10 @@ import connectDB from "./config/dbconn.config";
 import allowedOrigins from "./config/allowedOrigins.config";
 import fileUpload from "express-fileupload";
 
+// QRcodes
+import menuRouter from "./modules/QRCODE/MenuQRcode/MenuQR.route";
+import presentationRouter from "./modules/QRCODE/PresentationQRcode/PresentationQR.route";
+
 // Routes
 
 import individualUserAuthRouter from "./modules/authentication/individualUserAuth/individualAuth.route";
@@ -94,6 +98,8 @@ app.get("/", (req: Request, res: Response) => {
 
 app.use("/auth/individual", individualUserAuthRouter);
 app.use("/auth/admin", AdminUserRouter);
+app.use("/qr/menu", menuRouter);
+app.use("/qr/presentation", presentationRouter);
 
 // ============================================
 // SWAGGER/API DOCUMENTATION
