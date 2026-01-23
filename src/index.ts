@@ -125,9 +125,9 @@ const startServer = async () => {
   try {
     await connectDB();
     console.log("✅ Connected to MongoDB");
-    console.log("🔧 Environment:", process.env.NODE_ENV || "development");
-    console.log("🌐 Frontend URL:", process.env.FRONTEND_URL);
-    console.log("🍪 Cookie Domain:", process.env.COOKIE_DOMAIN || "not set");
+    // console.log("🔧 Environment:", process.env.NODE_ENV || "development");
+    // console.log("🌐 Frontend URL:", process.env.FRONTEND_URL);
+    // console.log("🍪 Cookie Domain:", process.env.COOKIE_DOMAIN || "not set");
 
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);

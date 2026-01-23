@@ -1,18 +1,22 @@
 import { Request } from "express";
 import { Types } from "mongoose";
 
+// In your types/userProfile.types.ts or types/index.ts
 export interface AuthenticatedUser {
-  id: string; // Use 'id' instead of '_id' to match your middleware
+  _id: string; // Add this to match your middleware
+  id: string; // Keep this
   email: string;
   role: string;
-  sessionId?: string;
+  session?: string; // Change from sessionId? to session?
+  iat?: number;
+  exp?: number;
 }
 
 export interface AuthenticatedRequest<T = any> extends Request {
   user?: AuthenticatedUser;
   body: T;
   files?: {
-    [key: string]: any; // or UploadedFile if using express-fileupload
+    [key: string]: any;
   } | null;
 }
 

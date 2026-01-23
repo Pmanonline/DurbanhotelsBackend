@@ -1,20 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import { ErrorResponse } from "../utilities/errorHandler.util";
 import jwt from "jsonwebtoken";
+import { AuthenticatedUser } from "../modules/profiles/types";
 
 // Extend Express Request to include user info
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        _id: string; // MongoDB ObjectId as string
-        id?: string; // Alternative field name for compatibility
-        email: string;
-        role: string;
-        session?: string; // Session ID
-        iat?: number; // Issued at timestamp
-        exp?: number; // Expiry timestamp
-      };
+      user?: AuthenticatedUser;
     }
   }
 }
