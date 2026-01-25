@@ -4,10 +4,11 @@ import { Session } from "../modules/sessions/session.model";
 import { ErrorResponse } from "./errorHandler.util";
 import IndividualUser from "../modules/authentication/individualUserAuth/individualUserAuth.model1";
 import { getCookieOptions } from "./cookieConfig.util";
+
 export const refreshAccessToken = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const refreshToken = req.body.refreshToken || req.cookies["refresh_token"];
@@ -67,7 +68,7 @@ export const refreshAccessToken = async (
 
     if (session.role === "ind" || session.role === "g-ind") {
       user = await IndividualUser.findById(session.user).select(
-        "_id email phone_number role"
+        "_id email phone_number role",
       );
     }
 
@@ -80,31 +81,22 @@ export const refreshAccessToken = async (
       return next(error);
     }
 
-    // Generate new access token
-    const newAccessToken = signJwt(
-      {
-        userData: {
-          _id: session.user.toString(),
-          role: session.role,
-        },
-        session: session._id.toString(),
+    // ✅ FIXED: Include email in the token payload
+    const tokenPayload = {
+      userData: {
+        _id: session.user.toString(),
+        email: user.email, // ✅ ADD THIS - Critical fix!
         role: session.role,
       },
-      { expiresIn: "15m" }
-    );
+      session: session._id.toString(),
+      role: session.role,
+    };
 
-    // Generate new refresh token (token rotation)
-    const newRefreshToken = signJwt(
-      {
-        userData: {
-          _id: session.user.toString(),
-          role: session.role,
-        },
-        session: session._id.toString(),
-        role: session.role,
-      },
-      { expiresIn: "30d" }
-    );
+    // Generate new access token with complete user data
+    const newAccessToken = signJwt(tokenPayload, { expiresIn: "1m" });
+
+    // Generate new refresh token (token rotation) with complete user data
+    const newRefreshToken = signJwt(tokenPayload, { expiresIn: "30d" });
 
     // Update session with new refresh token
     session.refreshToken = newRefreshToken;
@@ -113,13 +105,13 @@ export const refreshAccessToken = async (
     res.cookie(
       "access_token",
       newAccessToken,
-      getCookieOptions(15 * 60 * 1000) // 15 minutes
+      getCookieOptions(1 * 60 * 1000), // 1 minute
     );
 
     res.cookie(
       "refresh_token",
       newRefreshToken,
-      getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
+      getCookieOptions(30 * 24 * 60 * 60 * 1000), // 30 days
     );
 
     return res.status(200).json({

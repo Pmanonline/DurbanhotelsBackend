@@ -6,7 +6,7 @@ import { Session } from "../modules/sessions/session.model";
 import individualUserAuthModel from "../modules/authentication/individualUserAuth/individualUserAuth.model1";
 
 // At the top of the file
-const ACCESS_TOKEN_EXPIRY = "15m";
+const ACCESS_TOKEN_EXPIRY = "1m";
 const REFRESH_TOKEN_EXPIRY = "7d";
 
 export function generateAccessAndRefreshToken(
@@ -18,7 +18,7 @@ export function generateAccessAndRefreshToken(
     contact_email?: string;
   },
   sessionId: Types.ObjectId,
-  role: string
+  role: string,
 ): { accessToken: string; refreshToken: string } {
   //Extract email
   const userEmail =
@@ -72,7 +72,7 @@ export async function reIssueAccessToken({
 
   if (!user) return false;
 
-  const accessTokenTTL: string = process.env.ACCESS_TOKEN_TTL || "15m";
+  const accessTokenTTL: string = process.env.ACCESS_TOKEN_TTL || "1m";
 
   // Extract email from user
   const userEmail = user.email || user.organization_email || user.contact_email;
@@ -87,7 +87,7 @@ export async function reIssueAccessToken({
       session: session._id.toString(),
       role: session.role,
     },
-    { expiresIn: accessTokenTTL }
+    { expiresIn: accessTokenTTL },
   );
 
   return accessToken;

@@ -19,7 +19,7 @@ import { getCookieOptions } from "../../../utilities/cookieConfig.util";
 export const individualUserRegistration = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, phone_number, password, confirm_password } = req.body;
@@ -57,7 +57,7 @@ export const individualUserRegistration = async (
     const verificationToken = jwt.sign(
       { email: newUser.email },
       process.env.JWT_SECRET as string,
-      { expiresIn: "2h" }
+      { expiresIn: "2h" },
     );
 
     // Create verification URL and send email
@@ -293,7 +293,7 @@ export const individualUserRegistration = async (
 export const individualUserLogin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     console.log("🔐 Login attempt started:", {
@@ -372,7 +372,7 @@ export const individualUserLogin = async (
     });
 
     // Set cookies with logging
-    const accessCookieOptions = getCookieOptions(15 * 60 * 1000);
+    const accessCookieOptions = getCookieOptions(1 * 60 * 1000);
     const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
 
     console.log("🍪 Setting cookies:", {
@@ -418,7 +418,7 @@ export const individualUserLogin = async (
 export const verifyEmail = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { token } = req.query;
@@ -482,7 +482,7 @@ export const verifyEmail = async (
 export const resendVerificationEmail = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
@@ -519,7 +519,7 @@ export const resendVerificationEmail = async (
     const verificationToken = jwt.sign(
       { email: user.email },
       process.env.JWT_SECRET as string,
-      { expiresIn: "2h" }
+      { expiresIn: "2h" },
     );
 
     await sendVerificationEmail(email, verificationToken);
@@ -544,7 +544,7 @@ export const resendVerificationEmail = async (
 export const forgotPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
@@ -598,7 +598,7 @@ export const forgotPassword = async (
 export const resetIndividualPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { token } = req.query;
