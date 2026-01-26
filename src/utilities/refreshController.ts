@@ -93,7 +93,7 @@ export const refreshAccessToken = async (
     };
 
     // Generate new access token with complete user data
-    const newAccessToken = signJwt(tokenPayload, { expiresIn: "1m" });
+    const newAccessToken = signJwt(tokenPayload, { expiresIn: "1d" });
 
     // Generate new refresh token (token rotation) with complete user data
     const newRefreshToken = signJwt(tokenPayload, { expiresIn: "30d" });

@@ -68,7 +68,7 @@ export const createSessionAndSendTokens = async ({
   };
 
   // Generate tokens with email included
-  const accessToken = signJwt(tokenPayload, { expiresIn: "1m" });
+  const accessToken = signJwt(tokenPayload, { expiresIn: "1d" });
   const refreshToken = signJwt(tokenPayload, { expiresIn: "30d" });
 
   // Update session with refreshToken

@@ -372,7 +372,7 @@ export const individualUserLogin = async (
     });
 
     // Set cookies with logging
-    const accessCookieOptions = getCookieOptions(1 * 60 * 1000);
+    const accessCookieOptions = getCookieOptions(1 * 24 * 60 * 60 * 1000);
     const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
 
     console.log("🍪 Setting cookies:", {

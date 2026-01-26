@@ -25,7 +25,7 @@ interface TwitterUserWithEmail {
 export const handleGoogleLogin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { credential } = req.body;
@@ -97,7 +97,7 @@ export const handleGoogleLogin = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
     });
 
     res.cookie("refresh_token", result.refreshToken, {
@@ -136,7 +136,7 @@ export const handleGoogleLogin = async (
 export const initiateTwitterAuth = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     // Use the exact redirect URI from environment variables
@@ -163,7 +163,7 @@ export const initiateTwitterAuth = async (
       redirectUri,
       {
         scope: ["users.read", "tweet.read", "offline.access"],
-      }
+      },
     );
 
     console.log("✅ Generated Twitter OAuth URL");
@@ -205,7 +205,7 @@ export const initiateTwitterAuth = async (
 export const handleTwitterCallback = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { code, state } = req.body;
@@ -284,7 +284,7 @@ export const handleTwitterCallback = async (
 
     console.log("📧 Using generated email:", email);
     console.log(
-      "💡 Twitter OAuth 2.0 doesn't provide email addresses in API v2"
+      "💡 Twitter OAuth 2.0 doesn't provide email addresses in API v2",
     );
 
     // Find or create user
@@ -332,7 +332,7 @@ export const handleTwitterCallback = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 15 * 60 * 1000,
+      maxAge: 1 * 24 * 60 * 60 * 1000, //1 day
     });
 
     res.cookie("refresh_token", result.refreshToken, {
@@ -371,7 +371,7 @@ export const handleTwitterCallback = async (
     // Clean up session on error
     if (req.body.state) {
       await TwitterSession.deleteMany({ state: req.body.state }).catch(
-        console.error
+        console.error,
       );
     }
 
@@ -389,7 +389,7 @@ export const handleTwitterCallback = async (
 export const handleFacebookLogin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { accessToken } = req.body;
@@ -407,7 +407,7 @@ export const handleFacebookLogin = async (
 
     // Verify token and get user data from Facebook
     const { data } = await axios.get(
-      `https://graph.facebook.com/v20.0/me?fields=id,name,email,picture.width(500).height(500)&access_token=${accessToken}`
+      `https://graph.facebook.com/v20.0/me?fields=id,name,email,picture.width(500).height(500)&access_token=${accessToken}`,
     );
 
     console.log("✅ Facebook API response received");
@@ -478,7 +478,7 @@ export const handleFacebookLogin = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
     });
 
     res.cookie("refresh_token", result.refreshToken, {
@@ -505,7 +505,7 @@ export const handleFacebookLogin = async (
   } catch (error: any) {
     console.error(
       "Facebook login error:",
-      error.response?.data || error.message
+      error.response?.data || error.message,
     );
 
     let message = "Facebook authentication failed";
@@ -533,7 +533,7 @@ export const handleFacebookLogin = async (
 export const updateTwitterUserEmail = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId, email } = req.body;
@@ -575,7 +575,7 @@ export const updateTwitterUserEmail = async (
         email: email,
         email_verified: false, // Email needs verification
       },
-      { new: true }
+      { new: true },
     );
 
     if (!user) {
@@ -591,7 +591,7 @@ export const updateTwitterUserEmail = async (
     const verificationToken = jwt.sign(
       { email: user.email },
       process.env.JWT_SECRET as string,
-      { expiresIn: "2h" }
+      { expiresIn: "2h" },
     );
 
     // Send email verification
