@@ -66,7 +66,7 @@ export const createPresentationQR = async (
 
     // Generate unique short URL
     const shortCode = title.trim();
-    const baseUrl = process.env.FRONTEND_URL || "https://qrgenius.com";
+    const baseUrl = process.env.FRONTEND_URL;
     const qrCodeUrl = `${baseUrl}/presentation/${shortCode}`;
     const shortUrl = `${baseUrl}/p/${shortCode}`;
 
@@ -152,7 +152,7 @@ export const getPresentationById = async (
 
     // If not found, try to find by short code in URL
     if (!presentation) {
-      const baseUrl = process.env.FRONTEND_URL || "https://qrgenius.com";
+      const baseUrl = process.env.FRONTEND_URL;
       const shortUrl = `${baseUrl}/p/${id}`;
       presentation = await PresentationQR.findOne({ short_url: shortUrl });
     }

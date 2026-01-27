@@ -4,6 +4,7 @@ import mongoose, { Document, model, Model, Schema } from "mongoose";
 export interface IMenuItem {
   name: string;
   description?: string;
+  shortCode?: string;
   price: number;
   currency: string;
   category: string;
@@ -29,6 +30,7 @@ export interface MenuQRDocument extends Document {
   description?: string;
   business_name: string;
   business_logo?: string;
+  shortCode: string;
 
   // Menu type
   menu_type:
@@ -104,6 +106,9 @@ const MenuItemSchema = new Schema<IMenuItem>({
   description: {
     type: String,
     trim: true,
+  },
+  shortCode: {
+    type: String,
   },
   price: {
     type: Number,
@@ -197,6 +202,14 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
     },
     qr_code_image: {
       type: String,
+    },
+    shortCode: {
+      type: String,
+      required: [true, "Short code is required"],
+      unique: true,
+      trim: true,
+      minlength: [6, "Short code too short"],
+      index: true,
     },
     short_url: {
       type: String,

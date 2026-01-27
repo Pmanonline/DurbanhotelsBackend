@@ -14,7 +14,6 @@ export const createMenuQR = async (
   next: NextFunction,
 ) => {
   try {
-    // const AuthUSerID = userId?.userData?._id || userId?._id;
     const userId = req.user?._id || req.user?.id;
 
     if (!userId) {
@@ -27,7 +26,7 @@ export const createMenuQR = async (
     }
 
     const {
-      title,
+      title: rawTitle,
       description,
       business_name,
       business_logo,
@@ -40,7 +39,7 @@ export const createMenuQR = async (
     } = req.body;
 
     // Validation
-    if (!title || !business_name || !categories || categories.length === 0) {
+    if (!rawTitle || !business_name || !categories || categories.length === 0) {
       const error: ErrorResponse = {
         statusCode: 400,
         status: "fail",
@@ -49,26 +48,48 @@ export const createMenuQR = async (
       return next(error);
     }
 
-    // / Check for duplicate menu with the same title and business name
+    const title = rawTitle.trim();
+
+    // Optional: still check if this exact title already exists for this user
+    // (prevents accidental duplicates, but allows same title later if needed)
     const existingMenu = await MenuQR.findOne({
       user_id: userId,
-      title: title.trim(),
+      title,
     });
 
     if (existingMenu) {
       const error: ErrorResponse = {
         statusCode: 409,
         status: "fail",
-        message: "A menu with this title already exists",
+        message: "You already have a menu with this exact title",
       };
       return next(error);
     }
 
-    // Generate unique short URL
-    const shortCode = title.trim();
-    const baseUrl = process.env.FRONTEND_URL || "https://qrgenius.com";
-    const qrCodeUrl = `${baseUrl}/menu/${shortCode}`;
-    const shortUrl = `${baseUrl}/m/${shortCode}`;
+    // Generate timestamp only for the shortCode / slug (not stored in title)
+    const now = new Date();
+    const timestamp = now
+      .toISOString()
+      .replace(/[-:T.]/g, "")
+      .slice(0, 12);
+
+    // Create unique shortCode: title + timestamp
+    let shortCodeBase = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "") // keep letters, numbers, spaces, hyphens
+      .replace(/\s+/g, "-") // spaces → single hyphen
+      .replace(/-+/g, "-") // no double hyphens
+      .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
+
+    if (!shortCodeBase) {
+      shortCodeBase = "menu";
+    }
+
+    const shortCode = `${shortCodeBase}-${timestamp}`;
+
+    const baseUrl = process.env.FRONTEND_URL;
+    const qrCodeUrl = `${baseUrl}/qrcode/menu-details?id=${shortCode}`;
+    const shortUrl = `${baseUrl}/qrcode/menu-details?id=${shortCode}`;
 
     // Generate QR Code image
     const qrCodeImage = await QRCode.toDataURL(qrCodeUrl, {
@@ -80,10 +101,10 @@ export const createMenuQR = async (
       },
     });
 
-    // Create menu QR
     const menuQR = new MenuQR({
       user_id: userId,
       title,
+      shortCode, // ← save it here
       description,
       business_name,
       business_logo,
@@ -105,6 +126,9 @@ export const createMenuQR = async (
       message: "Menu QR Code created successfully",
       data: {
         menu: menuQR,
+        shortCode,
+        qrCodeUrl,
+        shortUrl,
       },
     });
   } catch (error) {
@@ -179,6 +203,78 @@ export const getUserMenus = async (
 /**
  * Get a single menu by ID or short code
  */
+// export const getMenuById = async (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction,
+// ) => {
+//   try {
+//     const { id } = req.params;
+
+//     console.log("🔍 Fetching menu with ID:", id);
+
+//     let menu = null;
+
+//     // Try to find by MongoDB ID
+//     menu = await MenuQR.findById(id);
+
+//     // If not found, try to find by short code
+//     if (!menu) {
+//       const baseUrl = process.env.FRONTEND_URL;
+//       const shortUrl = `${baseUrl}/m/${id}`;
+//       menu = await MenuQR.findOne({ short_url: shortUrl });
+//     }
+
+//     if (!menu) {
+//       console.log("❌ Menu not found");
+//       const error: ErrorResponse = {
+//         statusCode: 404,
+//         status: "fail",
+//         message: "Menu not found",
+//       };
+//       return next(error);
+//     }
+
+//     console.log("✅ Menu found:", {
+//       id: menu._id,
+//       title: menu.title,
+//       is_active: menu.is_active,
+//       is_public: menu.is_public,
+//       user_id: menu.user_id,
+//     });
+
+//     res.status(200).json({
+//       status: "success",
+//       data: {
+//         menu,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in getMenuById:", error);
+
+//     // Handle specific MongoDB errors
+//     if (error instanceof mongoose.Error.CastError) {
+//       const errResponse: ErrorResponse = {
+//         statusCode: 400,
+//         status: "fail",
+//         message: "Invalid menu ID format",
+//       };
+//       return next(errResponse);
+//     }
+
+//     const errResponse: ErrorResponse = {
+//       statusCode: 500,
+//       status: "error",
+//       message: "Error fetching menu",
+//       stack: error instanceof Error ? { stack: error.stack } : undefined,
+//     };
+//     next(errResponse);
+//   }
+// };
+
+/**
+ * Get a single menu by shortCode (preferred) or MongoDB _id (fallback)
+ */
 export const getMenuById = async (
   req: Request,
   res: Response,
@@ -187,36 +283,51 @@ export const getMenuById = async (
   try {
     const { id } = req.params;
 
-    console.log("🔍 Fetching menu with ID:", id);
+    if (!id) {
+      return next({
+        statusCode: 400,
+        status: "fail",
+        message: "Identifier (shortCode or ID) is required",
+      });
+    }
 
-    let menu = null;
+    console.log("🔍 Fetching menu with identifier:", id);
 
-    // Try to find by MongoDB ID
-    menu = await MenuQR.findById(id);
+    let menu: MenuQRDocument | null = null;
 
-    // If not found, try to find by short code
-    if (!menu) {
-      const baseUrl = process.env.FRONTEND_URL || "https://qrgenius.com";
-      const shortUrl = `${baseUrl}/m/${id}`;
-      menu = await MenuQR.findOne({ short_url: shortUrl });
+    // 1. First try as shortCode (most common case for public/QRs)
+    menu = await MenuQR.findOne({ shortCode: id });
+
+    // 2. If not found and it looks like a valid ObjectId → try _id
+    if (!menu && mongoose.Types.ObjectId.isValid(id)) {
+      menu = await MenuQR.findById(id);
     }
 
     if (!menu) {
-      console.log("❌ Menu not found");
-      const error: ErrorResponse = {
+      console.log("❌ Menu not found for identifier:", id);
+      return next({
         statusCode: 404,
         status: "fail",
         message: "Menu not found",
-      };
-      return next(error);
+      });
+    }
+
+    // Optional: Track public scans (skip for internal/admin fetches if needed)
+    // You can add middleware or query param to skip this if desired
+    if (menu.is_public) {
+      menu.scan_count += 1;
+      menu.last_scanned_at = new Date();
+      await menu.save({ validateBeforeSave: false }); // fast update, skip full validation
     }
 
     console.log("✅ Menu found:", {
-      id: menu._id,
+      _id: menu._id,
+      shortCode: menu.shortCode,
       title: menu.title,
       is_active: menu.is_active,
       is_public: menu.is_public,
-      user_id: menu.user_id,
+      user_id: menu.user_id?.toString(),
+      scan_count: menu.scan_count,
     });
 
     res.status(200).json({
@@ -226,25 +337,22 @@ export const getMenuById = async (
       },
     });
   } catch (error) {
-    console.error("❌ Error in getMenuById:", error);
+    console.error("❌ Error fetching menu:", error);
 
-    // Handle specific MongoDB errors
     if (error instanceof mongoose.Error.CastError) {
-      const errResponse: ErrorResponse = {
+      return next({
         statusCode: 400,
         status: "fail",
-        message: "Invalid menu ID format",
-      };
-      return next(errResponse);
+        message: "Invalid identifier format",
+      });
     }
 
-    const errResponse: ErrorResponse = {
+    next({
       statusCode: 500,
       status: "error",
       message: "Error fetching menu",
-      stack: error instanceof Error ? { stack: error.stack } : undefined,
-    };
-    next(errResponse);
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 };
 
