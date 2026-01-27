@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import MenuQR, { MenuQRDocument } from "./MenuQR.model";
 import { ErrorResponse } from "../../../utilities/errorHandler.util";
 import QRCode from "qrcode";
-import { nanoid } from "nanoid";
 import mongoose from "mongoose";
+import { createActivityLog } from "../Activity_log/activityLog.service";
 
 /**
  * Create a new Menu QR Code
@@ -50,8 +50,7 @@ export const createMenuQR = async (
 
     const title = rawTitle.trim();
 
-    // Optional: still check if this exact title already exists for this user
-    // (prevents accidental duplicates, but allows same title later if needed)
+    // Optional: check if title exists
     const existingMenu = await MenuQR.findOne({
       user_id: userId,
       title,
@@ -66,20 +65,19 @@ export const createMenuQR = async (
       return next(error);
     }
 
-    // Generate timestamp only for the shortCode / slug (not stored in title)
+    // Generate shortCode with timestamp
     const now = new Date();
     const timestamp = now
       .toISOString()
       .replace(/[-:T.]/g, "")
       .slice(0, 12);
 
-    // Create unique shortCode: title + timestamp
     let shortCodeBase = title
       .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "") // keep letters, numbers, spaces, hyphens
-      .replace(/\s+/g, "-") // spaces → single hyphen
-      .replace(/-+/g, "-") // no double hyphens
-      .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
     if (!shortCodeBase) {
       shortCodeBase = "menu";
@@ -96,15 +94,16 @@ export const createMenuQR = async (
       width: 500,
       margin: 2,
       color: {
-        dark: styling?.primary_color || "#000000",
+        dark: styling?.primary_color || "#3B82F6",
         light: "#FFFFFF",
       },
     });
 
+    // Create menu with proper defaults for required fields
     const menuQR = new MenuQR({
       user_id: userId,
       title,
-      shortCode, // ← save it here
+      shortCode,
       description,
       business_name,
       business_logo,
@@ -113,13 +112,37 @@ export const createMenuQR = async (
       qr_code_url: qrCodeUrl,
       qr_code_image: qrCodeImage,
       short_url: shortUrl,
-      styling: styling || {},
-      contact_info,
+      styling: styling || {
+        primary_color: "#3B82F6",
+        secondary_color: "#6B7280",
+        font_family: "Inter",
+        theme: "light",
+        layout: "list",
+      },
+      contact_info: contact_info || {},
       business_hours,
       is_public: is_public !== undefined ? is_public : true,
     });
 
     await menuQR.save();
+
+    // 📝 Create activity log
+    await createActivityLog({
+      user_id: userId,
+      activity_type: "menu_created",
+      title: "Menu QR Code Created",
+      description: `Restaurant menu QR for ${business_name}`,
+      entity_type: "menu",
+      entity_id: menuQR._id,
+      entity_name: title,
+      status: "success",
+      metadata: {
+        menu_type,
+        categories_count: categories.length,
+        is_public,
+      },
+      req,
+    });
 
     res.status(201).json({
       status: "success",
@@ -132,10 +155,26 @@ export const createMenuQR = async (
       },
     });
   } catch (error) {
+    console.error("❌ Error creating menu:", error);
+
+    // Log failed activity
+    const userId = req.user?._id || req.user?.id;
+    if (userId) {
+      await createActivityLog({
+        user_id: userId,
+        activity_type: "menu_created",
+        title: "Menu QR Code Creation Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        status: "failed",
+        req,
+      });
+    }
+
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
-      message: "Error creating menu QR code",
+      message:
+        error instanceof Error ? error.message : "Error creating menu QR code",
       stack: error instanceof Error ? { stack: error.stack } : undefined,
     };
     next(errResponse);
@@ -187,6 +226,7 @@ export const getUserMenus = async (
       },
     });
   } catch (error) {
+    console.error("❌ Error fetching menus:", error);
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -198,82 +238,7 @@ export const getUserMenus = async (
 };
 
 /**
- * Get a single menu by ID or short code
- */
-/**
- * Get a single menu by ID or short code
- */
-// export const getMenuById = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction,
-// ) => {
-//   try {
-//     const { id } = req.params;
-
-//     console.log("🔍 Fetching menu with ID:", id);
-
-//     let menu = null;
-
-//     // Try to find by MongoDB ID
-//     menu = await MenuQR.findById(id);
-
-//     // If not found, try to find by short code
-//     if (!menu) {
-//       const baseUrl = process.env.FRONTEND_URL;
-//       const shortUrl = `${baseUrl}/m/${id}`;
-//       menu = await MenuQR.findOne({ short_url: shortUrl });
-//     }
-
-//     if (!menu) {
-//       console.log("❌ Menu not found");
-//       const error: ErrorResponse = {
-//         statusCode: 404,
-//         status: "fail",
-//         message: "Menu not found",
-//       };
-//       return next(error);
-//     }
-
-//     console.log("✅ Menu found:", {
-//       id: menu._id,
-//       title: menu.title,
-//       is_active: menu.is_active,
-//       is_public: menu.is_public,
-//       user_id: menu.user_id,
-//     });
-
-//     res.status(200).json({
-//       status: "success",
-//       data: {
-//         menu,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("❌ Error in getMenuById:", error);
-
-//     // Handle specific MongoDB errors
-//     if (error instanceof mongoose.Error.CastError) {
-//       const errResponse: ErrorResponse = {
-//         statusCode: 400,
-//         status: "fail",
-//         message: "Invalid menu ID format",
-//       };
-//       return next(errResponse);
-//     }
-
-//     const errResponse: ErrorResponse = {
-//       statusCode: 500,
-//       status: "error",
-//       message: "Error fetching menu",
-//       stack: error instanceof Error ? { stack: error.stack } : undefined,
-//     };
-//     next(errResponse);
-//   }
-// };
-
-/**
- * Get a single menu by shortCode (preferred) or MongoDB _id (fallback)
+ * Get a single menu by shortCode or _id
  */
 export const getMenuById = async (
   req: Request,
@@ -295,10 +260,10 @@ export const getMenuById = async (
 
     let menu: MenuQRDocument | null = null;
 
-    // 1. First try as shortCode (most common case for public/QRs)
+    // Try shortCode first
     menu = await MenuQR.findOne({ shortCode: id });
 
-    // 2. If not found and it looks like a valid ObjectId → try _id
+    // Fallback to ObjectId
     if (!menu && mongoose.Types.ObjectId.isValid(id)) {
       menu = await MenuQR.findById(id);
     }
@@ -312,21 +277,33 @@ export const getMenuById = async (
       });
     }
 
-    // Optional: Track public scans (skip for internal/admin fetches if needed)
-    // You can add middleware or query param to skip this if desired
+    // Track scans for public menus
     if (menu.is_public) {
       menu.scan_count += 1;
       menu.last_scanned_at = new Date();
-      await menu.save({ validateBeforeSave: false }); // fast update, skip full validation
+      await menu.save({ validateBeforeSave: false });
+
+      // 📝 Log QR scan activity
+      await createActivityLog({
+        user_id: menu.user_id,
+        activity_type: "qr_scanned",
+        title: "QR Code Scanned",
+        description: `Menu "${menu.title}" was scanned`,
+        entity_type: "qr_code",
+        entity_id: menu._id,
+        entity_name: menu.title,
+        status: "info",
+        metadata: {
+          scan_count: menu.scan_count,
+        },
+        req,
+      });
     }
 
     console.log("✅ Menu found:", {
       _id: menu._id,
       shortCode: menu.shortCode,
       title: menu.title,
-      is_active: menu.is_active,
-      is_public: menu.is_public,
-      user_id: menu.user_id?.toString(),
       scan_count: menu.scan_count,
     });
 
@@ -357,7 +334,7 @@ export const getMenuById = async (
 };
 
 /**
- * Update menu
+ * Update menu - FIXED with proper type handling
  */
 export const updateMenu = async (
   req: Request,
@@ -368,6 +345,9 @@ export const updateMenu = async (
     const userId = req.user?._id || req.user?.id;
     const { id } = req.params;
 
+    console.log("🔄 Updating menu:", id);
+    console.log("📦 Update payload:", JSON.stringify(req.body, null, 2));
+
     if (!userId) {
       const error: ErrorResponse = {
         statusCode: 401,
@@ -377,9 +357,19 @@ export const updateMenu = async (
       return next(error);
     }
 
-    const menu = await MenuQR.findOne({ _id: id, user_id: userId });
+    // Find menu
+    let menu: MenuQRDocument | null = null;
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      menu = await MenuQR.findOne({ _id: id, user_id: userId });
+    }
 
     if (!menu) {
+      menu = await MenuQR.findOne({ shortCode: id, user_id: userId });
+    }
+
+    if (!menu) {
+      console.log("❌ Menu not found or unauthorized");
       const error: ErrorResponse = {
         statusCode: 404,
         status: "fail",
@@ -388,7 +378,10 @@ export const updateMenu = async (
       return next(error);
     }
 
-    // Update fields
+    // Store old values for activity log
+    const oldTitle = menu.title;
+
+    // Define allowed top-level fields
     const allowedUpdates = [
       "title",
       "description",
@@ -396,35 +389,103 @@ export const updateMenu = async (
       "business_logo",
       "menu_type",
       "categories",
-      "styling",
-      "contact_info",
-      "business_hours",
       "is_active",
       "is_public",
       "meta_title",
       "meta_description",
     ];
 
+    // Update simple fields
     allowedUpdates.forEach((field) => {
       if (req.body[field] !== undefined) {
         (menu as any)[field] = req.body[field];
       }
     });
 
-    // Regenerate QR code if styling changed
+    // Handle nested styling - FIXED
     if (req.body.styling) {
-      const qrCodeImage = await QRCode.toDataURL(menu.qr_code_url, {
-        width: 500,
-        margin: 2,
-        color: {
-          dark: req.body.styling.primary_color || "#000000",
-          light: "#FFFFFF",
-        },
-      });
-      menu.qr_code_image = qrCodeImage;
+      const currentStyling = menu.styling || {
+        primary_color: "#3B82F6",
+        secondary_color: "#6B7280",
+        font_family: "Inter",
+        theme: "light" as const,
+        layout: "list" as const,
+      };
+
+      menu.styling = {
+        ...currentStyling,
+        ...req.body.styling,
+      };
     }
 
+    // Handle nested contact_info - FIXED
+    if (req.body.contact_info) {
+      const currentContactInfo = menu.contact_info || {};
+
+      menu.contact_info = {
+        ...currentContactInfo,
+        ...req.body.contact_info,
+      };
+
+      // Handle nested social_media
+      if (req.body.contact_info.social_media) {
+        const currentSocialMedia = menu.contact_info?.social_media || {};
+        menu.contact_info.social_media = {
+          ...currentSocialMedia,
+          ...req.body.contact_info.social_media,
+        };
+      }
+    }
+
+    if (req.body.business_hours !== undefined) {
+      menu.business_hours = req.body.business_hours;
+    }
+
+    // Regenerate QR code if styling changed
+    if (req.body.styling?.primary_color) {
+      try {
+        const qrCodeImage = await QRCode.toDataURL(menu.qr_code_url, {
+          width: 500,
+          margin: 2,
+          color: {
+            dark: req.body.styling.primary_color || "#3B82F6",
+            light: "#FFFFFF",
+          },
+        });
+        menu.qr_code_image = qrCodeImage;
+        console.log("✅ QR code regenerated with new color");
+      } catch (qrError) {
+        console.error("⚠️ Failed to regenerate QR code:", qrError);
+      }
+    }
+
+    // Mark modified fields
+    menu.markModified("styling");
+    menu.markModified("contact_info");
+    menu.markModified("business_hours");
+    menu.markModified("categories");
+
     await menu.save();
+
+    console.log("✅ Menu updated successfully:", menu._id);
+
+    // 📝 Create activity log
+    await createActivityLog({
+      user_id: userId,
+      activity_type: "menu_updated",
+      title: "QR Code Updated",
+      description: `Updated redirect URL for ${menu.title}`,
+      entity_type: "menu",
+      entity_id: menu._id,
+      entity_name: menu.title,
+      status: "info",
+      metadata: {
+        updated_fields: Object.keys(req.body),
+        old_title: oldTitle,
+        new_title: menu.title,
+      },
+      req,
+    });
 
     res.status(200).json({
       status: "success",
@@ -434,10 +495,36 @@ export const updateMenu = async (
       },
     });
   } catch (error) {
+    console.error("❌ Error updating menu:", error);
+
+    // Log failed activity
+    const userId = req.user?._id || req.user?.id;
+    const { id } = req.params;
+    if (userId) {
+      await createActivityLog({
+        user_id: userId,
+        activity_type: "menu_updated",
+        title: "Menu Update Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        entity_id: id,
+        status: "failed",
+        req,
+      });
+    }
+
+    let message = "Error updating menu";
+    if (error instanceof mongoose.Error.ValidationError) {
+      message = `Validation error: ${Object.values(error.errors)
+        .map((e) => e.message)
+        .join(", ")}`;
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
-      message: "Error updating menu",
+      message,
       stack: error instanceof Error ? { stack: error.stack } : undefined,
     };
     next(errResponse);
@@ -465,7 +552,7 @@ export const deleteMenu = async (
       return next(error);
     }
 
-    const menu = await MenuQR.findOneAndDelete({ _id: id, user_id: userId });
+    const menu = await MenuQR.findOne({ _id: id, user_id: userId });
 
     if (!menu) {
       const error: ErrorResponse = {
@@ -475,6 +562,22 @@ export const deleteMenu = async (
       };
       return next(error);
     }
+
+    const menuTitle = menu.title;
+    await menu.deleteOne();
+
+    // 📝 Create activity log
+    await createActivityLog({
+      user_id: userId,
+      activity_type: "menu_deleted",
+      title: "Menu Deleted",
+      description: `Deleted menu: ${menuTitle}`,
+      entity_type: "menu",
+      entity_id: id,
+      entity_name: menuTitle,
+      status: "success",
+      req,
+    });
 
     res.status(200).json({
       status: "success",
@@ -522,6 +625,22 @@ export const getMenuAnalytics = async (
       };
       return next(error);
     }
+
+    // 📝 Log analytics download
+    await createActivityLog({
+      user_id: userId,
+      activity_type: "analytics_downloaded",
+      title: "Analytics Downloaded",
+      description: `Monthly scan report for ${menu.title}`,
+      entity_type: "analytics",
+      entity_id: menu._id,
+      entity_name: menu.title,
+      status: "success",
+      metadata: {
+        scan_count: menu.scan_count,
+      },
+      req,
+    });
 
     res.status(200).json({
       status: "success",

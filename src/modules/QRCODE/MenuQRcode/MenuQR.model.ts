@@ -22,7 +22,37 @@ export interface IMenuCategory {
   display_order: number;
 }
 
-// Menu QR Document Interface
+// Styling Interface - Now properly typed
+export interface IMenuStyling {
+  primary_color: string;
+  secondary_color: string;
+  font_family: string;
+  theme: "light" | "dark" | "auto";
+  layout: "grid" | "list" | "compact";
+}
+
+// Contact Info Interface - Now properly typed
+export interface IContactInfo {
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  social_media?: {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+  };
+}
+
+// Business Hours Interface
+export interface IBusinessHours {
+  day: string;
+  open_time: string;
+  close_time: string;
+  is_closed: boolean;
+}
+
+// Menu QR Document Interface - FIXED with required styling and contact_info
 export interface MenuQRDocument extends Document {
   _id: mongoose.Types.ObjectId;
   user_id: mongoose.Types.ObjectId;
@@ -39,6 +69,7 @@ export interface MenuQRDocument extends Document {
     | "food_truck"
     | "cafe"
     | "bar"
+    | "bakery"
     | "other";
 
   // Categories and items
@@ -49,35 +80,14 @@ export interface MenuQRDocument extends Document {
   qr_code_image?: string;
   short_url?: string;
 
-  // Styling options
-  styling: {
-    primary_color?: string;
-    secondary_color?: string;
-    font_family?: string;
-    theme: "light" | "dark" | "auto";
-    layout: "grid" | "list" | "compact";
-  };
+  // Styling options - NOW REQUIRED with default values
+  styling: IMenuStyling;
 
-  // Contact & Location
-  contact_info?: {
-    phone?: string;
-    email?: string;
-    website?: string;
-    address?: string;
-    social_media?: {
-      facebook?: string;
-      instagram?: string;
-      twitter?: string;
-    };
-  };
+  // Contact & Location - NOW REQUIRED (can be empty object)
+  contact_info: IContactInfo;
 
   // Business hours
-  business_hours?: {
-    day: string;
-    open_time: string;
-    close_time: string;
-    is_closed: boolean;
-  }[];
+  business_hours?: IBusinessHours[];
 
   // Analytics
   scan_count: number;
@@ -192,7 +202,15 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
     },
     menu_type: {
       type: String,
-      enum: ["restaurant", "catering", "food_truck", "cafe", "bar", "other"],
+      enum: [
+        "restaurant",
+        "catering",
+        "food_truck",
+        "cafe",
+        "bar",
+        "bakery",
+        "other",
+      ],
       default: "restaurant",
     },
     categories: [MenuCategorySchema],
@@ -214,54 +232,62 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
     short_url: {
       type: String,
     },
+    // FIXED: Now required with proper defaults
     styling: {
-      primary_color: {
-        type: String,
-        default: "#000000",
+      type: {
+        primary_color: {
+          type: String,
+          default: "#3B82F6",
+        },
+        secondary_color: {
+          type: String,
+          default: "#6B7280",
+        },
+        font_family: {
+          type: String,
+          default: "Inter",
+        },
+        theme: {
+          type: String,
+          enum: ["light", "dark", "auto"],
+          default: "light",
+        },
+        layout: {
+          type: String,
+          enum: ["grid", "list", "compact"],
+          default: "list",
+        },
       },
-      secondary_color: {
-        type: String,
-        default: "#ffffff",
-      },
-      font_family: {
-        type: String,
-        default: "Arial",
-      },
-      theme: {
-        type: String,
-        enum: ["light", "dark", "auto"],
-        default: "light",
-      },
-      layout: {
-        type: String,
-        enum: ["grid", "list", "compact"],
-        default: "list",
-      },
+      required: true,
+      default: () => ({
+        primary_color: "#3B82F6",
+        secondary_color: "#6B7280",
+        font_family: "Inter",
+        theme: "light",
+        layout: "list",
+      }),
     },
+    // FIXED: Now required with proper defaults
     contact_info: {
-      phone: String,
-      email: String,
-      website: String,
-      address: String,
-      social_media: {
-        facebook: String,
-        instagram: String,
-        twitter: String,
+      type: {
+        phone: String,
+        email: String,
+        website: String,
+        address: String,
+        social_media: {
+          facebook: String,
+          instagram: String,
+          twitter: String,
+        },
       },
+      required: true,
+      default: () => ({}),
     },
     business_hours: [
       {
         day: {
           type: String,
-          enum: [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-          ],
+          required: true,
         },
         open_time: String,
         close_time: String,
@@ -298,6 +324,7 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
 MenuQRSchema.index({ user_id: 1 });
 MenuQRSchema.index({ qr_code_url: 1 });
 MenuQRSchema.index({ short_url: 1 });
+MenuQRSchema.index({ shortCode: 1 });
 MenuQRSchema.index({ is_active: 1, is_public: 1 });
 
 const MenuQR = model<MenuQRDocument, MenuQRModel>("MenuQR", MenuQRSchema);

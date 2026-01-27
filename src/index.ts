@@ -12,6 +12,7 @@ import fileUpload from "express-fileupload";
 // QRcodes
 import menuRouter from "./modules/QRCODE/MenuQRcode/MenuQR.route";
 import presentationRouter from "./modules/QRCODE/PresentationQRcode/PresentationQR.route";
+import activityLogRouter from "./modules/QRCODE/Activity_log/ActivityLog.route";
 
 // Routes
 
@@ -100,6 +101,7 @@ app.use("/auth/individual", individualUserAuthRouter);
 app.use("/auth/admin", AdminUserRouter);
 app.use("/qr/menu", menuRouter);
 app.use("/qr/presentation", presentationRouter);
+app.use("/qr/activity", activityLogRouter);
 
 // ============================================
 // SWAGGER/API DOCUMENTATION
