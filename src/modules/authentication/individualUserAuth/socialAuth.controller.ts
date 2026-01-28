@@ -11,6 +11,7 @@ import {
 import { createSessionAndSendTokens } from "../../../utilities/createSessionAndSendToken.util";
 import { ErrorResponse } from "../../../utilities/errorHandler.util";
 import { emailValidator } from "../../../utilities/validator.utils";
+import { getCookieOptions } from "../../../utilities/cookieConfig.util";
 
 // Define extended types for Twitter response with email
 interface TwitterUserWithEmail {
@@ -28,6 +29,12 @@ export const handleGoogleLogin = async (
   next: NextFunction,
 ) => {
   try {
+    console.log("🔐 Google login attempt started:", {
+      hasCredential: !!req.body.credential,
+      userAgent: req.get("User-Agent"),
+      origin: req.get("origin"),
+    });
+
     const { credential } = req.body;
 
     if (!credential) {
@@ -41,6 +48,11 @@ export const handleGoogleLogin = async (
 
     // Decode the JWT credential from Google
     const decoded: any = jwt.decode(credential);
+    console.log("📋 Decoded Google token:", {
+      email: decoded?.email,
+      sub: decoded?.sub,
+      email_verified: decoded?.email_verified,
+    });
 
     if (!decoded?.email) {
       const error: ErrorResponse = {
@@ -55,6 +67,11 @@ export const handleGoogleLogin = async (
     let user = await IndividualUser.findOne({ email: decoded.email });
     const isNewUser = !user;
 
+    console.log(
+      isNewUser ? "📝 Creating new user" : "✅ User found:",
+      decoded.email,
+    );
+
     // Create new user if doesn't exist
     if (!user) {
       user = await IndividualUser.create({
@@ -65,13 +82,17 @@ export const handleGoogleLogin = async (
         sub: decoded.sub, // Google's unique user ID
         email_verified: true, // Google verifies emails
       });
-      console.log("✅ Created new user via Google login:", user.email);
+      console.log("✅ Created new user via Google login:", {
+        id: user._id,
+        email: user.email,
+      });
     } else {
       // Update existing user with latest Google data
       user.picture = decoded.picture || user.picture;
       user.sub = decoded.sub || user.sub;
       user.email_verified = true;
       await user.save();
+      console.log("✅ Updated existing user:", user._id);
     }
 
     // Send welcome email for new users
@@ -84,6 +105,8 @@ export const handleGoogleLogin = async (
     // Get user agent
     const userAgent = req.get("User-Agent") || "unknown";
 
+    console.log("🎫 Creating session for user:", user._id);
+
     // Create session and generate tokens
     const result = await createSessionAndSendTokens({
       user: user.toObject(),
@@ -92,36 +115,48 @@ export const handleGoogleLogin = async (
       message: isNewUser ? "Account created successfully" : "Login successful",
     });
 
-    // Set cookies
-    res.cookie("access_token", result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
-    });
+    console.log("✅ Session created successfully");
 
-    res.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    // Set cookies with proper options
+    const accessCookieOptions = getCookieOptions(1 * 24 * 60 * 60 * 1000);
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
+
+    res.cookie("access_token", result.accessToken, accessCookieOptions);
+    res.cookie("refresh_token", result.refreshToken, refreshCookieOptions);
+
+    // 🔥 FIXED: Consistent user response structure
+    const responseUser = {
+      id: user._id.toString(),
+      _id: user._id.toString(), // Add this for consistency
+      email: user.email,
+      phone_number: user.phone_number || "",
+      role: user.role,
+      picture: user.picture,
+      email_verified: user.email_verified,
+      name: user.name,
+      username: user.username,
+      profile_picture: user.picture, // Add alias for consistency
+    };
+
+    console.log("✅ Google login successful:", {
+      userId: responseUser.id,
+      email: responseUser.email,
     });
 
     res.status(200).json({
       status: "success",
       message: result.message,
-      user: {
-        id: user._id,
-        email: user.email,
-        phone_number: user.phone_number,
-        role: user.role,
-        picture: user.picture,
-        email_verified: user.email_verified,
-      },
+      user: responseUser,
+      token: result.accessToken, // Add for consistency
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
     });
   } catch (error) {
+    console.error("❌ Google login error:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -200,7 +235,6 @@ export const initiateTwitterAuth = async (
   }
 };
 
-// ==================== TWITTER CALLBACK ====================
 // ==================== TWITTER CALLBACK ====================
 export const handleTwitterCallback = async (
   req: Request,
@@ -328,23 +362,16 @@ export const handleTwitterCallback = async (
     });
 
     // Set cookies
-    res.cookie("access_token", result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000, //1 day
-    });
+    const accessCookieOptions = getCookieOptions(1 * 24 * 60 * 60 * 1000);
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
 
-    res.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("access_token", result.accessToken, accessCookieOptions);
+    res.cookie("refresh_token", result.refreshToken, refreshCookieOptions);
 
-    // Prepare response user object
+    // 🔥 FIXED: Consistent user response structure
     const responseUser = {
-      id: user._id,
+      id: user._id.toString(),
+      _id: user._id.toString(), // Add this for consistency
       email: user.email,
       phone_number: user.phone_number,
       role: user.role,
@@ -352,14 +379,16 @@ export const handleTwitterCallback = async (
       email_verified: user.email_verified,
       name: user.name,
       username: user.username,
-      isTwitterUser: true, // Add flag to identify Twitter users
-      needsEmail: true, // Add flag to indicate email collection needed
+      profile_picture: user.picture, // Add alias
+      isTwitterUser: true,
+      needsEmail: true,
     };
 
     res.status(200).json({
       status: "success",
       message: result.message,
       user: responseUser,
+      token: result.accessToken, // Add for consistency
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       flags: {
@@ -394,6 +423,8 @@ export const handleFacebookLogin = async (
   try {
     const { accessToken } = req.body;
 
+    console.log("🔐 Facebook login attempt started");
+
     if (!accessToken) {
       const error: ErrorResponse = {
         statusCode: 400,
@@ -410,7 +441,11 @@ export const handleFacebookLogin = async (
       `https://graph.facebook.com/v20.0/me?fields=id,name,email,picture.width(500).height(500)&access_token=${accessToken}`,
     );
 
-    console.log("✅ Facebook API response received");
+    console.log("✅ Facebook API response received:", {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+    });
 
     if (!data.id) {
       const error: ErrorResponse = {
@@ -438,6 +473,11 @@ export const handleFacebookLogin = async (
 
     const isNewUser = !user;
 
+    console.log(
+      isNewUser ? "📝 Creating new user" : "✅ User found:",
+      data.email,
+    );
+
     if (!user) {
       user = await IndividualUser.create({
         email: data.email,
@@ -446,13 +486,19 @@ export const handleFacebookLogin = async (
         picture: data.picture?.data?.url,
         sub: data.id, // Facebook user ID
         email_verified: true, // Facebook emails are verified
+        name: data.name,
       });
-      console.log("✅ Created new user via Facebook login:", user.email);
+      console.log("✅ Created new user via Facebook login:", {
+        id: user._id,
+        email: user.email,
+      });
     } else {
       // Update existing user with latest Facebook data
       user.picture = data.picture?.data?.url || user.picture;
+      user.name = data.name || user.name;
       user.email_verified = true;
       await user.save();
+      console.log("✅ Updated existing user:", user._id);
     }
 
     // Send welcome email for new users
@@ -465,6 +511,8 @@ export const handleFacebookLogin = async (
     // Get user agent
     const userAgent = req.get("User-Agent") || "unknown";
 
+    console.log("🎫 Creating session for user:", user._id);
+
     // Create session and generate tokens
     const result = await createSessionAndSendTokens({
       user: user.toObject(),
@@ -473,40 +521,47 @@ export const handleFacebookLogin = async (
       message: isNewUser ? "Account created successfully" : "Login successful",
     });
 
-    // Set cookies
-    res.cookie("access_token", result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
-    });
+    console.log("✅ Session created successfully");
 
-    res.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    // Set cookies
+    const accessCookieOptions = getCookieOptions(1 * 24 * 60 * 60 * 1000);
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000);
+
+    res.cookie("access_token", result.accessToken, accessCookieOptions);
+    res.cookie("refresh_token", result.refreshToken, refreshCookieOptions);
+
+    // 🔥 FIXED: Consistent user response structure
+    const responseUser = {
+      id: user._id.toString(),
+      _id: user._id.toString(), // Add this for consistency
+      email: user.email,
+      phone_number: user.phone_number || "",
+      role: user.role,
+      picture: user.picture,
+      email_verified: user.email_verified,
+      name: user.name,
+      username: user.username,
+      profile_picture: user.picture, // Add alias
+    };
+
+    console.log("✅ Facebook login successful:", {
+      userId: responseUser.id,
+      email: responseUser.email,
     });
 
     res.status(200).json({
       status: "success",
       message: result.message,
-      user: {
-        id: user._id,
-        email: user.email,
-        phone_number: user.phone_number,
-        role: user.role,
-        picture: user.picture,
-        email_verified: user.email_verified,
-      },
+      user: responseUser,
+      token: result.accessToken, // Add for consistency
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
     });
   } catch (error: any) {
-    console.error(
-      "Facebook login error:",
-      error.response?.data || error.message,
-    );
+    console.error("❌ Facebook login error:", {
+      message: error.response?.data || error.message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     let message = "Facebook authentication failed";
 
@@ -599,20 +654,25 @@ export const updateTwitterUserEmail = async (
       console.error("Failed to send verification email:", err);
     });
 
+    // 🔥 FIXED: Consistent response structure
+    const responseUser = {
+      id: user._id.toString(),
+      _id: user._id.toString(),
+      email: user.email,
+      phone_number: user.phone_number,
+      role: user.role,
+      picture: user.picture,
+      email_verified: user.email_verified,
+      name: user.name,
+      username: user.username,
+      profile_picture: user.picture,
+    };
+
     res.status(200).json({
       status: "success",
       message:
         "Email updated successfully. Please check your email for verification.",
-      user: {
-        id: user._id,
-        email: user.email,
-        phone_number: user.phone_number,
-        role: user.role,
-        picture: user.picture,
-        email_verified: user.email_verified,
-        name: user.name,
-        username: user.username,
-      },
+      user: responseUser,
     });
   } catch (error) {
     console.error("Email update error:", error);
