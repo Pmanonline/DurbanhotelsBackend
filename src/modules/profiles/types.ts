@@ -25,6 +25,7 @@ export interface UpdateProfileBody {
   email?: string;
   phone_number?: string;
   name?: string;
+  username?: string;
 }
 
 export interface UpdateBankDetailsBody {

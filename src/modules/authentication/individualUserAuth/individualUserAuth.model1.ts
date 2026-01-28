@@ -19,6 +19,7 @@ export interface IndividualUserDocument extends Document {
   passwordChangedAt?: Date;
   passwordResetExpires?: Date;
   passwordResetToken?: string;
+  createdAt: string;
 
   // Profile fields
   image?: string;
@@ -91,6 +92,7 @@ const individualUserSchema = new Schema<IndividualUserDocument>(
     deals_completed: { type: Number, default: 0 },
     rating: { type: Number, default: 0 },
     rating_count: { type: Number, default: 0 },
+    createdAt: { type: String },
 
     // Bank details
     bank_details: {

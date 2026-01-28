@@ -4,6 +4,8 @@ import {
   updateUserProfile,
   updateBankDetails,
   getBankDetails,
+  changePassword,
+  deleteAccount,
 } from "./userProfile.controller";
 import { asyncHandler } from "../../middlewares/asyncHandler.middleware";
 import { verifyAuth } from "../../middlewares/roleVerification.middleware";
@@ -156,5 +158,13 @@ userProfileRouter
 userProfileRouter
   .route("/bank-details")
   .put(verifyAuth, asyncHandler(updateBankDetails));
+
+userProfileRouter
+  .route("/change-password")
+  .put(verifyAuth, asyncHandler(changePassword));
+
+userProfileRouter
+  .route("/delete-account")
+  .delete(verifyAuth, asyncHandler(deleteAccount));
 
 export default userProfileRouter;

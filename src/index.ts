@@ -102,6 +102,7 @@ app.use("/auth/admin", AdminUserRouter);
 app.use("/qr/menu", menuRouter);
 app.use("/qr/presentation", presentationRouter);
 app.use("/qr/activity", activityLogRouter);
+app.use("/profile", userProfileRouter);
 
 // ============================================
 // SWAGGER/API DOCUMENTATION
