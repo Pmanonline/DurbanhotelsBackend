@@ -86,7 +86,7 @@ export const createMenuQR = async (
     const shortCode = `${shortCodeBase}-${timestamp}`;
 
     const baseUrl = process.env.FRONTEND_URL;
-    const qrCodeUrl = `${baseUrl}/qrcode/menu-details?id=${shortCode}`;
+    const qrCodeUrl = `${baseUrl}/qrcode/menu-details?id=${shortCode}&from=qr`;
     const shortUrl = `${baseUrl}/qrcode/menu-details?id=${shortCode}`;
 
     // Generate QR Code image
@@ -442,8 +442,10 @@ export const updateMenu = async (
     }
 
     // Regenerate QR code if styling changed
+    // In the updateMenu function, if you regenerate QR codes
     if (req.body.styling?.primary_color) {
       try {
+        // Make sure the URL includes &from=qr
         const qrCodeImage = await QRCode.toDataURL(menu.qr_code_url, {
           width: 500,
           margin: 2,
