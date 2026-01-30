@@ -1,30 +1,30 @@
 import mongoose, { Document, model, Model, Schema } from "mongoose";
 
+// Import types from service to ensure consistency
+import {
+  ActivityType,
+  EntityType,
+  ActivityStatus,
+} from "./activityLog.service";
+
 // Activity Log Interface
 export interface ActivityLogDocument extends Document {
   _id: mongoose.Types.ObjectId;
   user_id: mongoose.Types.ObjectId;
 
-  // Activity details
-  activity_type:
-    | "menu_created"
-    | "menu_updated"
-    | "menu_deleted"
-    | "qr_scanned"
-    | "analytics_downloaded"
-    | "team_invitation"
-    | "settings_changed";
+  // Activity details - using the exported ActivityType
+  activity_type: ActivityType;
 
   title: string;
   description: string;
 
-  // Related entity
-  entity_type?: "menu" | "qr_code" | "team" | "analytics" | "settings";
+  // Related entity - using the exported EntityType
+  entity_type?: EntityType;
   entity_id?: mongoose.Types.ObjectId | string;
   entity_name?: string;
 
-  // Status
-  status: "success" | "pending" | "failed" | "info";
+  // Status - using the exported ActivityStatus
+  status: ActivityStatus;
 
   // Additional metadata
   metadata?: {
@@ -52,17 +52,9 @@ const ActivityLogSchema = new Schema<ActivityLogDocument>(
     },
     activity_type: {
       type: String,
-      enum: [
-        "menu_created",
-        "menu_updated",
-        "menu_deleted",
-        "qr_scanned",
-        "analytics_downloaded",
-        "team_invitation",
-        "settings_changed",
-      ],
       required: [true, "Activity type is required"],
       index: true,
+      // Remove hardcoded enum - it will be validated by service types
     },
     title: {
       type: String,
@@ -76,7 +68,7 @@ const ActivityLogSchema = new Schema<ActivityLogDocument>(
     },
     entity_type: {
       type: String,
-      enum: ["menu", "qr_code", "team", "analytics", "settings"],
+      // Remove hardcoded enum - it will be validated by service types
     },
     entity_id: {
       type: Schema.Types.Mixed, // Can be ObjectId or string
@@ -87,9 +79,9 @@ const ActivityLogSchema = new Schema<ActivityLogDocument>(
     },
     status: {
       type: String,
-      enum: ["success", "pending", "failed", "info"],
       default: "success",
       index: true,
+      // Remove hardcoded enum - it will be validated by service types
     },
     metadata: {
       type: Schema.Types.Mixed,
@@ -113,6 +105,7 @@ ActivityLogSchema.index({ user_id: 1, activity_type: 1, createdAt: -1 });
 ActivityLogSchema.index({ entity_id: 1, entity_type: 1 });
 
 // Auto-delete old logs after 90 days (optional)
+// Commented out for now - uncomment when you want to enable TTL
 ActivityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 }); // 90 days
 
 const ActivityLog = model<ActivityLogDocument, ActivityLogModel>(

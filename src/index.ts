@@ -13,6 +13,7 @@ import fileUpload from "express-fileupload";
 import menuRouter from "./modules/QRCODE/MenuQRcode/MenuQR.route";
 import presentationRouter from "./modules/QRCODE/PresentationQRcode/PresentationQR.route";
 import activityLogRouter from "./modules/QRCODE/Activity_log/ActivityLog.route";
+import MenuFeedbackRouter from "./modules/QRCODE/MenuFeedBack/MenuFeedback.routes";
 
 // Routes
 
@@ -27,6 +28,7 @@ import { errorHandlingMiddleware } from "./middlewares/errorHandling.middleware"
 // Swagger config
 import { options as prodOptions } from "./prodSwagger";
 import { options as devOptions } from "./devSwagger";
+import MenuFeedback from "./modules/QRCODE/MenuFeedBack/MenuFeedback.model";
 
 // Load environment variables
 dotenv.config();
@@ -103,6 +105,7 @@ app.use("/qr/menu", menuRouter);
 app.use("/qr/presentation", presentationRouter);
 app.use("/qr/activity", activityLogRouter);
 app.use("/profile", userProfileRouter);
+app.use("/qr/menu-feedback", MenuFeedbackRouter);
 
 // ============================================
 // SWAGGER/API DOCUMENTATION

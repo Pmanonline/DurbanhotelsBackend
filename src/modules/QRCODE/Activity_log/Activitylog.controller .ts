@@ -5,7 +5,72 @@ import {
   getEntityActivityLogs,
   getUserActivityStats,
   formatActivityLog,
+  ActivityType,
+  ActivityStatus,
+  EntityType,
 } from "./activityLog.service";
+
+// Type guards to validate string inputs
+const isValidActivityType = (value: any): value is ActivityType => {
+  const validTypes: ActivityType[] = [
+    "menu_created",
+    "menu_updated",
+    "menu_deleted",
+    "qr_scanned",
+    "analytics_downloaded",
+    "menu_feedback_received",
+    "feedback_responded",
+    "feedback_archived",
+    "feedback_updated",
+    "team_invitation",
+    "team_member_added",
+    "team_member_removed",
+    "settings_changed",
+    "profile_updated",
+    "password_changed",
+    "qr_code_created",
+    "qr_code_updated",
+    "qr_code_deleted",
+    "presentation_created",
+    "presentation_updated",
+    "presentation_deleted",
+    "login",
+    "logout",
+    "registration",
+    "password_reset",
+    "email_verified",
+    "api_key_created",
+    "api_key_revoked",
+  ];
+  return validTypes.includes(value);
+};
+
+const isValidActivityStatus = (value: any): value is ActivityStatus => {
+  const validStatuses: ActivityStatus[] = [
+    "success",
+    "pending",
+    "failed",
+    "info",
+    "warning",
+  ];
+  return validStatuses.includes(value);
+};
+
+const isValidEntityType = (value: any): value is EntityType => {
+  const validEntityTypes: EntityType[] = [
+    "menu",
+    "qr_code",
+    "analytics",
+    "team",
+    "settings",
+    "menu_feedback",
+    "presentation",
+    "user",
+    "api_key",
+    "system",
+  ];
+  return validEntityTypes.includes(value);
+};
 
 /**
  * Get user activity logs with pagination and filters
@@ -30,8 +95,20 @@ export const getActivityLogs = async (
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const activity_type = req.query.activity_type as string | undefined;
-    const status = req.query.status as string | undefined;
+
+    // Validate and cast activity_type
+    const activityTypeParam = req.query.activity_type as string | undefined;
+    const activity_type =
+      activityTypeParam && isValidActivityType(activityTypeParam)
+        ? activityTypeParam
+        : undefined;
+
+    // Validate and cast status
+    const statusParam = req.query.status as string | undefined;
+    const status =
+      statusParam && isValidActivityStatus(statusParam)
+        ? statusParam
+        : undefined;
 
     const result = await getUserActivityLogs(userId, {
       page,
@@ -180,6 +257,16 @@ export const getEntityActivities = async (
         statusCode: 400,
         status: "fail",
         message: "Entity type and ID are required",
+      };
+      return next(error);
+    }
+
+    // Validate entity type
+    if (!isValidEntityType(entityType)) {
+      const error: ErrorResponse = {
+        statusCode: 400,
+        status: "fail",
+        message: `Invalid entity type. Must be one of: menu, qr_code, analytics, team, settings, menu_feedback, presentation, user, api_key, system`,
       };
       return next(error);
     }
