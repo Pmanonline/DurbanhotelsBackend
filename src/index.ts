@@ -11,7 +11,7 @@ import fileUpload from "express-fileupload";
 
 // QRcodes
 import menuRouter from "./modules/QRCODE/MenuQRcode/MenuQR.route";
-import presentationRouter from "./modules/QRCODE/PresentationQRcode/PresentationQR.route";
+import UnifiedQRRouter from "./modules/QRCODE/UnifiedQRcode/UnifiedQR.route";
 import activityLogRouter from "./modules/QRCODE/Activity_log/ActivityLog.route";
 import MenuFeedbackRouter from "./modules/QRCODE/MenuFeedBack/MenuFeedback.routes";
 
@@ -102,7 +102,7 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/auth/individual", individualUserAuthRouter);
 app.use("/auth/admin", AdminUserRouter);
 app.use("/qr/menu", menuRouter);
-app.use("/qr/presentation", presentationRouter);
+app.use("/qr/unified", UnifiedQRRouter);
 app.use("/qr/activity", activityLogRouter);
 app.use("/profile", userProfileRouter);
 app.use("/qr/menu-feedback", MenuFeedbackRouter);

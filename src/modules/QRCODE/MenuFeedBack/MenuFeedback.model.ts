@@ -2,35 +2,25 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IMenuFeedback extends Document {
   menu_id: mongoose.Types.ObjectId;
-  user_id?: mongoose.Types.ObjectId; // Optional for anonymous feedback
-  user_ip?: string; // For rate limiting
+  user_id?: mongoose.Types.ObjectId;
+  user_ip?: string;
 
-  // Feedback details
   type: "review" | "report" | "suggestion" | "comment" | "rating";
-  rating?: number; // 1-5 stars (only for review/rating type)
+  rating?: number;
   title?: string;
   message: string;
 
-  // Category tags (for filtering)
   category?:
-    | "product_quality"
+    | "food_quality"
     | "service"
     | "pricing"
     | "hygiene"
     | "atmosphere"
     | "other";
 
-  // Response from business owner
-  response?: {
-    message: string;
-    responded_at: Date;
-  };
+  status: "pending" | "read" | "archived";
+  is_public: boolean;
 
-  // Status
-  status: "pending" | "read" | "archived" | "responded";
-  is_public: boolean; // Whether to show on public menu page
-
-  // Metadata
   created_at: Date;
   updated_at: Date;
 }
@@ -67,7 +57,6 @@ const MenuFeedbackSchema = new Schema<IMenuFeedback>(
       max: 5,
       validate: {
         validator: function (this: IMenuFeedback) {
-          // Rating only required for review/rating types
           if (this.type === "review" || this.type === "rating") {
             return (
               this.rating !== undefined && this.rating >= 1 && this.rating <= 5
@@ -106,14 +95,9 @@ const MenuFeedbackSchema = new Schema<IMenuFeedback>(
       default: "other",
     },
 
-    response: {
-      message: String,
-      responded_at: Date,
-    },
-
     status: {
       type: String,
-      enum: ["pending", "read", "archived", "responded"],
+      enum: ["pending", "read", "archived"],
       default: "pending",
       index: true,
     },
@@ -121,36 +105,23 @@ const MenuFeedbackSchema = new Schema<IMenuFeedback>(
     is_public: {
       type: Boolean,
       default: function (this: IMenuFeedback) {
-        // Reviews with ratings are public by default
         return this.type === "review" || this.type === "rating";
       },
     },
 
-    created_at: {
-      type: Date,
-      default: Date.now,
-    },
-
-    updated_at: {
-      type: Date,
-      default: Date.now,
-    },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now },
   },
   {
-    timestamps: {
-      createdAt: "created_at",
-      updatedAt: "updated_at",
-    },
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   },
 );
 
-// Indexes for performance
 MenuFeedbackSchema.index({ menu_id: 1, status: 1 });
 MenuFeedbackSchema.index({ menu_id: 1, type: 1 });
 MenuFeedbackSchema.index({ menu_id: 1, created_at: -1 });
-MenuFeedbackSchema.index({ user_ip: 1, created_at: 1 }); // For rate limiting
+MenuFeedbackSchema.index({ user_ip: 1, created_at: 1 });
 
-// Auto-update timestamps
 MenuFeedbackSchema.pre("save", function (next) {
   this.updated_at = new Date();
   next();

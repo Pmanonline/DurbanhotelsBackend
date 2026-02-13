@@ -22,16 +22,61 @@ export interface IMenuCategory {
   display_order: number;
 }
 
-// Styling Interface - Now properly typed
+// QR Design Styling Interface - NEW
+export interface IQRDesignStyling {
+  // Template & Shape
+  qr_template?: "classic" | "rounded" | "dots" | "heart" | "star" | "diamond";
+  dot_style?: "square" | "rounded" | "dots" | "heart" | "star" | "diamond";
+  corner_style?: "square" | "rounded" | "dot" | "heart" | "star" | "diamond";
+
+  // Frame
+  frame?:
+    | "none"
+    | "thin"
+    | "thick"
+    | "shadow"
+    | "rounded"
+    | "pattern"
+    | "14feb"
+    | "baby";
+  frame_color?: string;
+  frame_text?: string;
+
+  // Colors & Patterns
+  body_pattern?: "single" | "gradient" | "transparent";
+  qr_primary_color?: string;
+  qr_secondary_color?: string;
+  qr_background_color?: string;
+  gradient_type?: "linear" | "radial";
+  gradient_rotation?: number;
+
+  // Logo/Image
+  logo_image?: string;
+  logo_size?: "small" | "medium" | "large";
+  logo_style?: "square" | "rounded" | "circle";
+
+  // Advanced
+  error_correction?: "L" | "M" | "Q" | "H"; // Low, Medium, Quartile, High
+  margin?: number; // 0-10
+  qr_size?: number; // 300-2000px
+}
+
+// Menu Styling Interface - Updated
 export interface IMenuStyling {
   primary_color: string;
   secondary_color: string;
   font_family: string;
+  font_size?: "small" | "medium" | "large" | "xl";
+  font_weight?: "light" | "regular" | "medium" | "semibold" | "bold";
+  letter_spacing?: "tight" | "normal" | "wide" | "wider";
   theme: "light" | "dark" | "auto";
   layout: "grid" | "list" | "compact";
+
+  // QR Design Styling - NEW
+  qr_design?: IQRDesignStyling;
 }
 
-// Contact Info Interface - Now properly typed
+// Contact Info Interface
 export interface IContactInfo {
   phone?: string;
   email?: string;
@@ -41,6 +86,8 @@ export interface IContactInfo {
     facebook?: string;
     instagram?: string;
     twitter?: string;
+    linkedin?: string;
+    tiktok?: string;
   };
 }
 
@@ -52,7 +99,7 @@ export interface IBusinessHours {
   is_closed: boolean;
 }
 
-// Menu QR Document Interface - FIXED with required styling and contact_info
+// Menu QR Document Interface - Updated
 export interface MenuQRDocument extends Document {
   _id: mongoose.Types.ObjectId;
   user_id: mongoose.Types.ObjectId;
@@ -80,10 +127,10 @@ export interface MenuQRDocument extends Document {
   qr_code_image?: string;
   short_url?: string;
 
-  // Styling options - NOW REQUIRED with default values
+  // Enhanced styling with QR design
   styling: IMenuStyling;
 
-  // Contact & Location - NOW REQUIRED (can be empty object)
+  // Contact & Location
   contact_info: IContactInfo;
 
   // Business hours
@@ -174,6 +221,117 @@ const MenuCategorySchema = new Schema<IMenuCategory>({
   },
 });
 
+// QR Design Styling Schema - NEW
+const QRDesignStylingSchema = new Schema<IQRDesignStyling>(
+  {
+    // Template & Shape
+    qr_template: {
+      type: String,
+      enum: ["classic", "rounded", "dots", "heart", "star", "diamond"],
+      default: "classic",
+    },
+    dot_style: {
+      type: String,
+      enum: ["square", "rounded", "dots", "heart", "star", "diamond"],
+      default: "square",
+    },
+    corner_style: {
+      type: String,
+      enum: ["square", "rounded", "dot", "heart", "star", "diamond"],
+      default: "square",
+    },
+
+    // Frame
+    frame: {
+      type: String,
+      enum: [
+        "none",
+        "thin",
+        "thick",
+        "shadow",
+        "rounded",
+        "pattern",
+        "14feb",
+        "baby",
+      ],
+      default: "none",
+    },
+    frame_color: {
+      type: String,
+      default: "#000000",
+    },
+    frame_text: {
+      type: String,
+      maxlength: 50,
+    },
+
+    // Colors & Patterns
+    body_pattern: {
+      type: String,
+      enum: ["single", "gradient", "transparent"],
+      default: "single",
+    },
+    qr_primary_color: {
+      type: String,
+      default: "#000000",
+    },
+    qr_secondary_color: {
+      type: String,
+      default: "#000000",
+    },
+    qr_background_color: {
+      type: String,
+      default: "#FFFFFF",
+    },
+    gradient_type: {
+      type: String,
+      enum: ["linear", "radial"],
+      default: "linear",
+    },
+    gradient_rotation: {
+      type: Number,
+      min: 0,
+      max: 360,
+      default: 0,
+    },
+
+    // Logo/Image
+    logo_image: {
+      type: String,
+    },
+    logo_size: {
+      type: String,
+      enum: ["small", "medium", "large"],
+      default: "medium",
+    },
+    logo_style: {
+      type: String,
+      enum: ["square", "rounded", "circle"],
+      default: "rounded",
+    },
+
+    // Advanced
+    error_correction: {
+      type: String,
+      enum: ["L", "M", "Q", "H"],
+      default: "M",
+    },
+    margin: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: 2,
+    },
+    qr_size: {
+      type: Number,
+      min: 300,
+      max: 2000,
+      default: 1000,
+    },
+  },
+  { _id: false },
+);
+
 const MenuQRSchema = new Schema<MenuQRDocument>(
   {
     user_id: {
@@ -232,7 +390,7 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
     short_url: {
       type: String,
     },
-    // FIXED: Now required with proper defaults
+    // Enhanced styling with QR design
     styling: {
       type: {
         primary_color: {
@@ -247,6 +405,21 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
           type: String,
           default: "Inter",
         },
+        font_size: {
+          type: String,
+          enum: ["small", "medium", "large", "xl"],
+          default: "medium",
+        },
+        font_weight: {
+          type: String,
+          enum: ["light", "regular", "medium", "semibold", "bold"],
+          default: "regular",
+        },
+        letter_spacing: {
+          type: String,
+          enum: ["tight", "normal", "wide", "wider"],
+          default: "normal",
+        },
         theme: {
           type: String,
           enum: ["light", "dark", "auto"],
@@ -257,17 +430,49 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
           enum: ["grid", "list", "compact"],
           default: "list",
         },
+        // QR Design Styling - NEW
+        qr_design: {
+          type: QRDesignStylingSchema,
+          default: () => ({
+            qr_template: "classic",
+            dot_style: "square",
+            corner_style: "square",
+            frame: "none",
+            body_pattern: "single",
+            qr_primary_color: "#000000",
+            qr_secondary_color: "#000000",
+            qr_background_color: "#FFFFFF",
+            error_correction: "M",
+            margin: 2,
+            qr_size: 1000,
+          }),
+        },
       },
       required: true,
       default: () => ({
         primary_color: "#3B82F6",
         secondary_color: "#6B7280",
         font_family: "Inter",
+        font_size: "medium",
+        font_weight: "regular",
+        letter_spacing: "normal",
         theme: "light",
         layout: "list",
+        qr_design: {
+          qr_template: "classic",
+          dot_style: "square",
+          corner_style: "square",
+          frame: "none",
+          body_pattern: "single",
+          qr_primary_color: "#000000",
+          qr_secondary_color: "#000000",
+          qr_background_color: "#FFFFFF",
+          error_correction: "M",
+          margin: 2,
+          qr_size: 1000,
+        },
       }),
     },
-    // FIXED: Now required with proper defaults
     contact_info: {
       type: {
         phone: String,
@@ -278,6 +483,8 @@ const MenuQRSchema = new Schema<MenuQRDocument>(
           facebook: String,
           instagram: String,
           twitter: String,
+          linkedin: String,
+          tiktok: String,
         },
       },
       required: true,

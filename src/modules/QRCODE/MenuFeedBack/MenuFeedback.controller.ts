@@ -12,7 +12,7 @@ import {
 } from "../Activity_log/activityLog.service";
 
 /**
- * Submit feedback for a menu
+ * Submit feedback for a menu (public)
  */
 export const submitMenuFeedback = async (
   req: Request,
@@ -23,14 +23,12 @@ export const submitMenuFeedback = async (
     const { menu_id, type, rating, title, message, category } = req.body;
     const userId = req.user?._id || req.user?.id;
 
-    // Extract and normalize IP address
     const rawIp =
       req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress;
     const userIp = Array.isArray(rawIp)
       ? rawIp[0]
       : rawIp?.toString() || undefined;
 
-    // Validate required fields
     if (!menu_id || !type || !message) {
       const error: ErrorResponse = {
         statusCode: 400,
@@ -40,7 +38,6 @@ export const submitMenuFeedback = async (
       return next(error);
     }
 
-    // Check if menu exists
     const menu = await MenuQR.findById(menu_id);
     if (!menu) {
       const error: ErrorResponse = {
@@ -71,7 +68,6 @@ export const submitMenuFeedback = async (
       return next(error);
     }
 
-    // Validate rating for review/rating types
     if (
       (type === "review" || type === "rating") &&
       (!rating || rating < 1 || rating > 5)
@@ -84,7 +80,6 @@ export const submitMenuFeedback = async (
       return next(error);
     }
 
-    // Create feedback
     const feedback = new MenuFeedback({
       menu_id,
       user_id: userId,
@@ -99,14 +94,12 @@ export const submitMenuFeedback = async (
 
     await feedback.save();
 
-    // 📝 Log activity for menu owner - properly typed
     await createActivityLog({
       user_id: menu.user_id,
       activity_type: "menu_feedback_received" as ActivityType,
       title: "New Menu Feedback Received",
       description: `New ${type} for "${menu.title}"`,
       entity_type: "menu_feedback" as EntityType,
-      //   entity_id: feedback._id.toString(),
       entity_name: menu.title,
       status: "info" as ActivityStatus,
       req,
@@ -125,7 +118,6 @@ export const submitMenuFeedback = async (
     });
   } catch (error) {
     console.error("❌ Error submitting feedback:", error);
-
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -138,7 +130,7 @@ export const submitMenuFeedback = async (
 };
 
 /**
- * Get feedback for a menu (public)
+ * Get public feedback for a menu
  */
 export const getMenuFeedback = async (
   req: Request,
@@ -158,7 +150,6 @@ export const getMenuFeedback = async (
       return next(error);
     }
 
-    // Check if menu exists and is public
     const menu = await MenuQR.findById(menu_id);
     if (!menu || !menu.is_public) {
       const error: ErrorResponse = {
@@ -169,7 +160,6 @@ export const getMenuFeedback = async (
       return next(error);
     }
 
-    // Build query
     const query: any = {
       menu_id,
       is_public: true,
@@ -179,21 +169,19 @@ export const getMenuFeedback = async (
     if (type) query.type = type;
     if (category) query.category = category;
 
-    // Pagination
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    // Get feedback
     const feedback = await MenuFeedback.find(query)
       .sort({ created_at: -1 })
       .skip(skip)
       .limit(limitNum)
-      .select("type rating title message category response created_at")
+      .select("type rating title message category created_at")
       .lean();
 
-    // Get stats
     const total = await MenuFeedback.countDocuments(query);
+
     const stats = await MenuFeedback.aggregate([
       {
         $match: {
@@ -206,9 +194,7 @@ export const getMenuFeedback = async (
           _id: "$type",
           count: { $sum: 1 },
           averageRating: {
-            $avg: {
-              $cond: [{ $ne: ["$rating", null] }, "$rating", null],
-            },
+            $avg: { $cond: [{ $ne: ["$rating", null] }, "$rating", null] },
           },
         },
       },
@@ -243,7 +229,6 @@ export const getMenuFeedback = async (
     });
   } catch (error) {
     console.error("❌ Error fetching feedback:", error);
-
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -285,7 +270,6 @@ export const getOwnerMenuFeedback = async (
       return next(error);
     }
 
-    // Verify menu ownership
     const menu = await MenuQR.findOne({ _id: menu_id, user_id: userId });
     if (!menu) {
       const error: ErrorResponse = {
@@ -296,17 +280,14 @@ export const getOwnerMenuFeedback = async (
       return next(error);
     }
 
-    // Build query
     const query: any = { menu_id };
     if (status) query.status = status;
     if (type) query.type = type;
 
-    // Pagination
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    // Get feedback with user IP (for owner only)
     const feedback = await MenuFeedback.find(query)
       .sort({ created_at: -1 })
       .skip(skip)
@@ -315,8 +296,6 @@ export const getOwnerMenuFeedback = async (
       .lean();
 
     const total = await MenuFeedback.countDocuments(query);
-
-    // Get unread count
     const unreadCount = await MenuFeedback.countDocuments({
       menu_id,
       status: "pending",
@@ -349,7 +328,6 @@ export const getOwnerMenuFeedback = async (
     });
   } catch (error) {
     console.error("❌ Error fetching owner feedback:", error);
-
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -361,11 +339,125 @@ export const getOwnerMenuFeedback = async (
 };
 
 /**
- * Update feedback status (owner only)
+ * Mark a single feedback as read (owner only)
  */
+export const markAsRead = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    const { feedback_id } = req.params;
+
+    if (!userId) {
+      const error: ErrorResponse = {
+        statusCode: 401,
+        status: "fail",
+        message: "User not authenticated",
+      };
+      return next(error);
+    }
+
+    const feedback = await MenuFeedback.findById(feedback_id).populate<{
+      menu_id: { user_id: mongoose.Types.ObjectId; title: string };
+    }>({ path: "menu_id", select: "user_id title" });
+
+    if (!feedback) {
+      const error: ErrorResponse = {
+        statusCode: 404,
+        status: "fail",
+        message: "Feedback not found",
+      };
+      return next(error);
+    }
+
+    const menu = feedback.menu_id as any;
+    if (!menu || menu.user_id.toString() !== userId.toString()) {
+      const error: ErrorResponse = {
+        statusCode: 403,
+        status: "fail",
+        message: "You don't have permission to update this feedback",
+      };
+      return next(error);
+    }
+
+    if (feedback.status === "pending") {
+      feedback.status = "read";
+      await feedback.save();
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Feedback marked as read",
+    });
+  } catch (error) {
+    console.error("❌ Error marking feedback as read:", error);
+    const errResponse: ErrorResponse = {
+      statusCode: 500,
+      status: "error",
+      message: "Error updating feedback",
+      stack: error instanceof Error ? { stack: error.stack } : undefined,
+    };
+    next(errResponse);
+  }
+};
 
 /**
- * Delete feedback (owner only)
+ * Mark all pending feedback as read for a menu (owner only)
+ */
+export const markAllAsRead = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    const { menu_id } = req.params;
+
+    if (!userId) {
+      const error: ErrorResponse = {
+        statusCode: 401,
+        status: "fail",
+        message: "User not authenticated",
+      };
+      return next(error);
+    }
+
+    const menu = await MenuQR.findOne({ _id: menu_id, user_id: userId });
+    if (!menu) {
+      const error: ErrorResponse = {
+        statusCode: 403,
+        status: "fail",
+        message: "You don't have permission to update feedback for this menu",
+      };
+      return next(error);
+    }
+
+    const result = await MenuFeedback.updateMany(
+      { menu_id, status: "pending" },
+      { $set: { status: "read" } },
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: `${result.modifiedCount} feedback item(s) marked as read`,
+      data: { updated_count: result.modifiedCount },
+    });
+  } catch (error) {
+    console.error("❌ Error marking all feedback as read:", error);
+    const errResponse: ErrorResponse = {
+      statusCode: 500,
+      status: "error",
+      message: "Error updating feedback",
+      stack: error instanceof Error ? { stack: error.stack } : undefined,
+    };
+    next(errResponse);
+  }
+};
+
+/**
+ * Delete feedback permanently (owner only)
  */
 export const deleteFeedback = async (
   req: Request,
@@ -385,13 +477,9 @@ export const deleteFeedback = async (
       return next(error);
     }
 
-    // Find feedback and verify menu ownership
     const feedback = await MenuFeedback.findById(feedback_id).populate<{
       menu_id: { user_id: mongoose.Types.ObjectId; title: string };
-    }>({
-      path: "menu_id",
-      select: "user_id title",
-    });
+    }>({ path: "menu_id", select: "user_id title" });
 
     if (!feedback) {
       const error: ErrorResponse = {
@@ -402,7 +490,6 @@ export const deleteFeedback = async (
       return next(error);
     }
 
-    // Type assertion to access menu_id.user_id
     const menu = feedback.menu_id as any;
     if (!menu || menu.user_id.toString() !== userId.toString()) {
       const error: ErrorResponse = {
@@ -413,29 +500,24 @@ export const deleteFeedback = async (
       return next(error);
     }
 
-    // Archive instead of delete
-    feedback.status = "archived";
-    await feedback.save();
+    await MenuFeedback.findByIdAndDelete(feedback_id);
 
-    // 📝 Log activity - properly typed
     await createActivityLog({
       user_id: userId,
-      activity_type: "feedback_archived" as ActivityType,
-      title: "Feedback Archived",
-      description: `Archived feedback for "${menu.title}"`,
+      activity_type: "feedback_deleted" as ActivityType,
+      title: "Feedback Deleted",
+      description: `Deleted feedback for "${menu.title}"`,
       entity_type: "menu_feedback" as EntityType,
-      //   entity_id: feedback._id.toString(),
       status: "success" as ActivityStatus,
       req,
     });
 
     res.status(200).json({
       status: "success",
-      message: "Feedback archived successfully",
+      message: "Feedback deleted successfully",
     });
   } catch (error) {
     console.error("❌ Error deleting feedback:", error);
-
     const errResponse: ErrorResponse = {
       statusCode: 500,
       status: "error",
@@ -445,6 +527,10 @@ export const deleteFeedback = async (
     next(errResponse);
   }
 };
+
+/**
+ * Get all menus belonging to the authenticated user
+ */
 export const getUserMenus = async (
   req: Request,
   res: Response,

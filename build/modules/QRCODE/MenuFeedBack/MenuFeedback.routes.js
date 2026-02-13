@@ -1,39 +1,25 @@
-import { Router } from "express";
-import {
-  submitMenuFeedback,
-  getMenuFeedback,
-  getOwnerMenuFeedback,
-  deleteFeedback,
-  getUserMenus,
-  markAsRead,
-  markAllAsRead,
-} from "./MenuFeedback.controller";
-import { asyncHandler } from "../../../middlewares/asyncHandler.middleware";
-import {
-  verifyAuth,
-  individualOnly,
-} from "../../../middlewares/roleVerification.middleware";
-import { rateLimiter } from "../../../middlewares/rateLimiter.middleware";
-
-const feedbackRouter = Router();
-
-const feedbackRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Too many feedback submissions. Please try again later.",
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const MenuFeedback_controller_1 = require("./MenuFeedback.controller");
+const asyncHandler_middleware_1 = require("../../../middlewares/asyncHandler.middleware");
+const roleVerification_middleware_1 = require("../../../middlewares/roleVerification.middleware");
+const rateLimiter_middleware_1 = require("../../../middlewares/rateLimiter.middleware");
+const feedbackRouter = (0, express_1.Router)();
+const feedbackRateLimiter = (0, rateLimiter_middleware_1.rateLimiter)({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: "Too many feedback submissions. Please try again later.",
 });
-
 /**
  * @swagger
  * tags:
  *   name: MenuFeedback
  *   description: Menu feedback and reviews management
  */
-
 // ─────────────────────────────────────────────
 // STATIC / SPECIFIC ROUTES  (must come first)
 // ─────────────────────────────────────────────
-
 /**
  * @swagger
  * /api/menu-feedback:
@@ -73,9 +59,8 @@ const feedbackRateLimiter = rateLimiter({
  *         description: Too many submissions
  */
 feedbackRouter
-  .route("/")
-  .post(feedbackRateLimiter, asyncHandler(submitMenuFeedback));
-
+    .route("/")
+    .post(feedbackRateLimiter, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.submitMenuFeedback));
 /**
  * @swagger
  * /api/menu-feedback/user-menus:
@@ -91,9 +76,8 @@ feedbackRouter
  *         description: Unauthorized
  */
 feedbackRouter
-  .route("/user-menus")
-  .get(verifyAuth, individualOnly, asyncHandler(getUserMenus));
-
+    .route("/user-menus")
+    .get(roleVerification_middleware_1.verifyAuth, roleVerification_middleware_1.individualOnly, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.getUserMenus));
 /**
  * @swagger
  * /api/menu-feedback/public/{menu_id}:
@@ -130,8 +114,7 @@ feedbackRouter
  *       404:
  *         description: Menu not found
  */
-feedbackRouter.route("/public/:menu_id").get(asyncHandler(getMenuFeedback));
-
+feedbackRouter.route("/public/:menu_id").get((0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.getMenuFeedback));
 /**
  * @swagger
  * /api/menu-feedback/owner/{menu_id}:
@@ -174,9 +157,8 @@ feedbackRouter.route("/public/:menu_id").get(asyncHandler(getMenuFeedback));
  *         description: Not menu owner
  */
 feedbackRouter
-  .route("/owner/:menu_id")
-  .get(verifyAuth, individualOnly, asyncHandler(getOwnerMenuFeedback));
-
+    .route("/owner/:menu_id")
+    .get(roleVerification_middleware_1.verifyAuth, roleVerification_middleware_1.individualOnly, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.getOwnerMenuFeedback));
 /**
  * @swagger
  * /api/menu-feedback/owner/{menu_id}/read-all:
@@ -200,13 +182,11 @@ feedbackRouter
  *         description: Not menu owner
  */
 feedbackRouter
-  .route("/owner/:menu_id/read-all")
-  .patch(verifyAuth, individualOnly, asyncHandler(markAllAsRead));
-
+    .route("/owner/:menu_id/read-all")
+    .patch(roleVerification_middleware_1.verifyAuth, roleVerification_middleware_1.individualOnly, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.markAllAsRead));
 // ─────────────────────────────────────────────
 // PARAMETERIZED ROUTES  (must come last)
 // ─────────────────────────────────────────────
-
 /**
  * @swagger
  * /api/menu-feedback/{feedback_id}/read:
@@ -232,9 +212,8 @@ feedbackRouter
  *         description: Feedback not found
  */
 feedbackRouter
-  .route("/:feedback_id/read")
-  .patch(verifyAuth, individualOnly, asyncHandler(markAsRead));
-
+    .route("/:feedback_id/read")
+    .patch(roleVerification_middleware_1.verifyAuth, roleVerification_middleware_1.individualOnly, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.markAsRead));
 /**
  * @swagger
  * /api/menu-feedback/{feedback_id}:
@@ -260,7 +239,6 @@ feedbackRouter
  *         description: Feedback not found
  */
 feedbackRouter
-  .route("/:feedback_id")
-  .delete(verifyAuth, individualOnly, asyncHandler(deleteFeedback));
-
-export default feedbackRouter;
+    .route("/:feedback_id")
+    .delete(roleVerification_middleware_1.verifyAuth, roleVerification_middleware_1.individualOnly, (0, asyncHandler_middleware_1.asyncHandler)(MenuFeedback_controller_1.deleteFeedback));
+exports.default = feedbackRouter;
