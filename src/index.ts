@@ -29,6 +29,7 @@ import { errorHandlingMiddleware } from "./middlewares/errorHandling.middleware"
 import { options as prodOptions } from "./prodSwagger";
 import { options as devOptions } from "./devSwagger";
 import MenuFeedback from "./modules/QRCODE/MenuFeedBack/MenuFeedback.model";
+import uploadRouter from "./modules/QRCODE/UnifiedQRcode/upload.routes";
 
 // Load environment variables
 dotenv.config();
@@ -63,7 +64,7 @@ app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "/tmp/",
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: 20 * 1024 * 1024 },
     abortOnLimit: true,
     createParentPath: true,
     parseNested: true,
@@ -106,6 +107,7 @@ app.use("/qr/unified", UnifiedQRRouter);
 app.use("/qr/activity", activityLogRouter);
 app.use("/profile", userProfileRouter);
 app.use("/qr/menu-feedback", MenuFeedbackRouter);
+app.use("/upload", uploadRouter);
 
 // ============================================
 // SWAGGER/API DOCUMENTATION

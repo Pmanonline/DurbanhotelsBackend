@@ -8,11 +8,11 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import { createActivityLog } from "../Activity_log/activityLog.service";
 import crypto from "crypto";
+import { deletePresentationFromCloudinary } from "./upload.routes";
 
 const getClientIP = (req: Request): string => {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
-    // x-forwarded-for can be a comma-separated list; first entry is the client
     const first = Array.isArray(forwarded)
       ? forwarded[0]
       : forwarded.split(",")[0];
@@ -25,12 +25,18 @@ const getClientIP = (req: Request): string => {
   );
 };
 
+function toISOString(date: Date | string | undefined): string | undefined {
+  if (!date) return undefined;
+  if (typeof date === "string") return date;
+  if (date instanceof Date) return date.toISOString();
+  return new Date(date).toISOString();
+}
+
 const buildScanFingerprint = (req: Request): string => {
   const ip = getClientIP(req);
   const ua = req.headers["user-agent"] || "unknown";
   const lang = req.headers["accept-language"] || "unknown";
   const day = new Date().toISOString().slice(0, 10);
-
   const raw = `${ip}|${ua}|${lang}|${day}`;
   return crypto.createHash("sha256").update(raw).digest("hex");
 };
@@ -42,46 +48,36 @@ const checkAndRecordScan = (
   const fingerprint = buildScanFingerprint(req);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Initialise the map if it doesn't exist yet (first scan ever)
-  if (!qr.daily_scan_fingerprints) {
-    qr.daily_scan_fingerprints = {};
-  }
+  if (!qr.daily_scan_fingerprints) qr.daily_scan_fingerprints = {};
 
   const yesterday = new Date(Date.now() - 86_400_000)
     .toISOString()
     .slice(0, 10);
-  const keysToDelete = Object.keys(qr.daily_scan_fingerprints).filter(
-    (k) => k !== today && k !== yesterday,
-  );
-  keysToDelete.forEach((k) => delete qr.daily_scan_fingerprints[k]);
+  Object.keys(qr.daily_scan_fingerprints)
+    .filter((k) => k !== today && k !== yesterday)
+    .forEach((k) => delete qr.daily_scan_fingerprints[k]);
 
-  // Get today's fingerprint list (may be empty/missing)
   const todayFingerprints: string[] = qr.daily_scan_fingerprints[today] || [];
-
-  // Check if this device already scanned today
   if (todayFingerprints.includes(fingerprint)) {
     return { isUnique: false, fingerprint };
   }
-
-  // New unique scan — record it
   qr.daily_scan_fingerprints[today] = [...todayFingerprints, fingerprint];
-
   return { isUnique: true, fingerprint };
 };
 
-/**
- * Generate QR data string based on type
- */
+// ─── QR data-string builder ───────────────────────────────────────────────────
+
 const generateQRDataString = (qrDoc: UnifiedQRDocument): string => {
   switch (qrDoc.qr_type) {
     case "url":
       return qrDoc.url_data?.url || "";
 
-    case "wifi":
+    case "wifi": {
       const wifi = qrDoc.wifi_data!;
       return `WIFI:T:${wifi.security};S:${wifi.ssid};P:${wifi.password};H:${wifi.hidden ? "true" : "false"};;`;
+    }
 
-    case "vcard":
+    case "vcard": {
       const vc = qrDoc.vcard_data!;
       let vcard = "BEGIN:VCARD\nVERSION:3.0\n";
       vcard += `N:${vc.lastName};${vc.firstName};;;\n`;
@@ -93,29 +89,47 @@ const generateQRDataString = (qrDoc: UnifiedQRDocument): string => {
       if (vc.email) vcard += `EMAIL:${vc.email}\n`;
       if (vc.website) vcard += `URL:${vc.website}\n`;
       if (vc.address) {
-        const addr = vc.address;
-        vcard += `ADR;TYPE=WORK:;;${addr.street || ""};${addr.city || ""};${addr.state || ""};${addr.zip || ""};${addr.country || ""}\n`;
+        const a = vc.address;
+        vcard += `ADR;TYPE=WORK:;;${a.street || ""};${a.city || ""};${a.state || ""};${a.zip || ""};${a.country || ""}\n`;
       }
       if (vc.note) vcard += `NOTE:${vc.note}\n`;
       vcard += "END:VCARD";
       return vcard;
+    }
 
     case "social":
       return qrDoc.social_data?.url || "";
 
-    case "event":
+    case "event": {
       const evt = qrDoc.event_data!;
+
+      // Safely convert dates (handles both strings from JSON and Date objects)
+      const startISO = toISOString(evt.start_date);
+      const endISO = evt.end_date ? toISOString(evt.end_date) : undefined;
+
+      // Validate required field
+      if (!startISO) {
+        throw new Error("Event start date is required");
+      }
+
+      // Format date for iCalendar: YYYYMMDDTHHMMSSZ
+      const formatForICal = (isoString: string) => {
+        return isoString.replace(/[-:]/g, "").split(".")[0] + "Z";
+      };
+
+      // Build iCalendar format
       let ical = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\n";
       ical += `SUMMARY:${evt.title}\n`;
       if (evt.description) ical += `DESCRIPTION:${evt.description}\n`;
       if (evt.location) ical += `LOCATION:${evt.location}\n`;
-      ical += `DTSTART:${evt.start_date.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\n`;
-      if (evt.end_date)
-        ical += `DTEND:${evt.end_date.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\n`;
+      ical += `DTSTART:${formatForICal(startISO)}\n`;
+      if (endISO) ical += `DTEND:${formatForICal(endISO)}\n`;
       if (evt.organizer) ical += `ORGANIZER:${evt.organizer}\n`;
       if (evt.url) ical += `URL:${evt.url}\n`;
       ical += "END:VEVENT\nEND:VCALENDAR";
+
       return ical;
+    }
 
     case "presentation":
       return qrDoc.qr_code_url;
@@ -125,6 +139,7 @@ const generateQRDataString = (qrDoc: UnifiedQRDocument): string => {
   }
 };
 
+// Create
 export const createUnifiedQR = async (
   req: Request,
   res: Response,
@@ -132,26 +147,23 @@ export const createUnifiedQR = async (
 ) => {
   try {
     const userId = req.user?._id || req.user?.id;
-
     if (!userId) {
-      const error: ErrorResponse = {
+      return next({
         statusCode: 401,
         status: "fail",
         message: "User not authenticated",
-      };
-      return next(error);
+      } as ErrorResponse);
     }
 
     const { qr_type, title, description, qr_design, styling, access_settings } =
       req.body;
 
     if (!qr_type || !title) {
-      const error: ErrorResponse = {
+      return next({
         statusCode: 400,
         status: "fail",
         message: "QR type and title are required",
-      };
-      return next(error);
+      } as ErrorResponse);
     }
 
     const existingQR = await UnifiedQR.findOne({
@@ -159,14 +171,12 @@ export const createUnifiedQR = async (
       title: title.trim(),
       qr_type,
     });
-
     if (existingQR) {
-      const error: ErrorResponse = {
+      return next({
         statusCode: 409,
         status: "fail",
         message: `A ${qr_type} QR with this title already exists`,
-      };
-      return next(error);
+      } as ErrorResponse);
     }
 
     const typeDataMap: Record<string, string> = {
@@ -180,26 +190,19 @@ export const createUnifiedQR = async (
 
     const requiredField = typeDataMap[qr_type];
     if (!requiredField || !req.body[requiredField]) {
-      const error: ErrorResponse = {
+      return next({
         statusCode: 400,
         status: "fail",
         message: `${requiredField} is required for QR type: ${qr_type}`,
-      };
-      return next(error);
+      } as ErrorResponse);
     }
 
     const shortCode = QRService.generateShortCode(title);
-
     const baseUrl = process.env.FRONTEND_URL;
     const qrCodeUrl = `${baseUrl}/qrcode/${qr_type}?id=${shortCode}&from=qr`;
     const shortUrl = `${baseUrl}/qrcode/${shortCode}`;
 
-    const tempQR: any = {
-      qr_type,
-      ...req.body,
-      qr_code_url: qrCodeUrl,
-    };
-
+    const tempQR: any = { qr_type, ...req.body, qr_code_url: qrCodeUrl };
     const qrDataString = generateQRDataString(tempQR);
     const qrCodeImage = await QRService.generateStyledQRCode(
       qrDataString,
@@ -227,7 +230,6 @@ export const createUnifiedQR = async (
         password: hashedPassword,
         current_scans: 0,
       },
-      // Initialise empty deduplication map
       daily_scan_fingerprints: {},
     };
 
@@ -250,10 +252,8 @@ export const createUnifiedQR = async (
     });
 
     const response = unifiedQR.toObject();
-    if (response.access_settings?.password) {
+    if (response.access_settings?.password)
       delete response.access_settings.password;
-    }
-    // Never expose fingerprint data to clients
     delete (response as any).daily_scan_fingerprints;
 
     res.status(201).json({
@@ -263,7 +263,6 @@ export const createUnifiedQR = async (
     });
   } catch (error) {
     console.error("❌ Error creating QR:", error);
-
     const userId = req.user?._id || req.user?.id;
     if (userId) {
       await createActivityLog({
@@ -275,20 +274,16 @@ export const createUnifiedQR = async (
         req,
       });
     }
-
-    const errResponse: ErrorResponse = {
+    next({
       statusCode: 500,
       status: "error",
       message: "Error creating QR code",
       stack: error instanceof Error ? { stack: error.stack } : undefined,
-    };
-    next(errResponse);
+    } as ErrorResponse);
   }
 };
 
-/**
- * Get all QR codes for user
- */
+// GetAll
 export const getUserQRCodes = async (
   req: Request,
   res: Response,
@@ -296,29 +291,23 @@ export const getUserQRCodes = async (
 ) => {
   try {
     const userId = req.user?._id || req.user?.id;
-
-    if (!userId) {
-      const error: ErrorResponse = {
+    if (!userId)
+      return next({
         statusCode: 401,
         status: "fail",
         message: "User not authenticated",
-      };
-      return next(error);
-    }
+      } as ErrorResponse);
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
     const filter: any = { user_id: userId };
-
     if (req.query.qr_type) filter.qr_type = req.query.qr_type;
-    if (req.query.is_active !== undefined) {
+    if (req.query.is_active !== undefined)
       filter.is_active = req.query.is_active === "true";
-    }
 
     const qrCodes = await UnifiedQR.find(filter)
-      // Exclude both password and fingerprint data from list responses
       .select("-access_settings.password -daily_scan_fingerprints")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -331,25 +320,20 @@ export const getUserQRCodes = async (
       results: qrCodes.length,
       data: {
         qrCodes,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       },
     });
   } catch (error) {
-    const errResponse: ErrorResponse = {
+    next({
       statusCode: 500,
       status: "error",
       message: "Error fetching QR codes",
       stack: error instanceof Error ? { stack: error.stack } : undefined,
-    };
-    next(errResponse);
+    } as ErrorResponse);
   }
 };
 
+// Get By ID
 export const getQRById = async (
   req: Request,
   res: Response,
@@ -359,112 +343,88 @@ export const getQRById = async (
     const { id } = req.params;
     const { password } = req.body;
 
-    let qr: any = null;
+    let qr: any = mongoose.Types.ObjectId.isValid(id)
+      ? await UnifiedQR.findById(id)
+      : null;
+    if (!qr) qr = await UnifiedQR.findOne({ shortCode: id });
 
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      qr = await UnifiedQR.findById(id);
-    }
-
-    if (!qr) {
-      qr = await UnifiedQR.findOne({ shortCode: id });
-    }
-
-    if (!qr) {
-      const error: ErrorResponse = {
+    if (!qr)
+      return next({
         statusCode: 404,
         status: "fail",
         message: "QR code not found",
-      };
-      return next(error);
-    }
-
-    if (!qr.is_active) {
+      } as ErrorResponse);
+    if (!qr.is_active)
       return next({
         statusCode: 403,
         status: "fail",
         message: "This QR code is no longer active",
       } as ErrorResponse);
-    }
-
     if (
       qr.access_settings.expiry_date &&
       new Date() > qr.access_settings.expiry_date
-    ) {
+    )
       return next({
         statusCode: 403,
         status: "fail",
         message: "This QR code has expired",
       } as ErrorResponse);
-    }
-
     if (
       qr.access_settings.max_scans &&
       qr.access_settings.current_scans >= qr.access_settings.max_scans
-    ) {
+    )
       return next({
         statusCode: 403,
         status: "fail",
         message: "This QR code has reached its scan limit",
       } as ErrorResponse);
-    }
 
     if (qr.access_settings.requires_password) {
-      if (!password) {
+      if (!password)
         return next({
           statusCode: 401,
           status: "fail",
           message: "Password required",
         } as ErrorResponse);
-      }
-
       const qrWithPassword = await UnifiedQR.findById(qr._id).select(
         "+access_settings.password",
       );
-
-      if (!qrWithPassword?.access_settings.password) {
+      if (!qrWithPassword?.access_settings.password)
         return next({
           statusCode: 500,
           status: "error",
           message: "Password configuration error",
         } as ErrorResponse);
-      }
-
       const isValid = await bcrypt.compare(
         password,
         qrWithPassword.access_settings.password,
       );
-
-      if (!isValid) {
+      if (!isValid)
         return next({
           statusCode: 401,
           status: "fail",
           message: "Incorrect password",
         } as ErrorResponse);
-      }
     }
 
     const { isUnique } = checkAndRecordScan(qr, req);
-
     qr.scan_count += 1;
     qr.last_scanned_at = new Date();
-
     if (isUnique) {
       qr.access_settings.current_scans += 1;
       console.log(
-        `✅ Unique scan recorded for QR ${qr._id} | total: ${qr.scan_count} | unique: ${qr.access_settings.current_scans}`,
+        `✅ Unique scan for QR ${qr._id} | total: ${qr.scan_count} | unique: ${qr.access_settings.current_scans}`,
       );
     } else {
       console.log(
-        `ℹ️ Duplicate scan ignored for QR ${qr._id} | total hits: ${qr.scan_count}`,
+        `ℹ️ Duplicate scan for QR ${qr._id} | total hits: ${qr.scan_count}`,
       );
     }
 
-    // Mark the nested map as modified so Mongoose detects the change
     qr.markModified("daily_scan_fingerprints");
     qr.markModified("access_settings");
     await qr.save();
 
-    // ── Activity log (only for unique scans to avoid log spam) ──────────────
     if (isUnique) {
       await createActivityLog({
         user_id: qr.user_id,
@@ -485,26 +445,19 @@ export const getQRById = async (
       });
     }
 
-    // ── Build response (strip sensitive fields) ───────────────────────────────
     const response = qr.toObject();
-    if (response.access_settings?.password) {
+    if (response.access_settings?.password)
       delete response.access_settings.password;
-    }
     delete response.daily_scan_fingerprints;
 
-    res.status(200).json({
-      status: "success",
-      data: { qr: response },
-    });
+    res.status(200).json({ status: "success", data: { qr: response } });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) {
+    if (error instanceof mongoose.Error.CastError)
       return next({
         statusCode: 400,
         status: "fail",
         message: "Invalid QR ID format",
       } as ErrorResponse);
-    }
-
     next({
       statusCode: 500,
       status: "error",
@@ -514,9 +467,7 @@ export const getQRById = async (
   }
 };
 
-/**
- * Update QR
- */
+// UPDATE
 export const updateQR = async (
   req: Request,
   res: Response,
@@ -526,25 +477,20 @@ export const updateQR = async (
     const userId = req.user?._id || req.user?.id;
     const { id } = req.params;
 
-    if (!userId) {
-      const error: ErrorResponse = {
+    if (!userId)
+      return next({
         statusCode: 401,
         status: "fail",
         message: "User not authenticated",
-      };
-      return next(error);
-    }
+      } as ErrorResponse);
 
     const qr = await UnifiedQR.findOne({ _id: id, user_id: userId });
-
-    if (!qr) {
-      const error: ErrorResponse = {
+    if (!qr)
+      return next({
         statusCode: 404,
         status: "fail",
         message: "QR code not found or unauthorized",
-      };
-      return next(error);
-    }
+      } as ErrorResponse);
 
     const oldTitle = qr.title;
     let qrNeedsRegeneration = false;
@@ -559,15 +505,28 @@ export const updateQR = async (
       "meta_title",
       "meta_description",
     ];
-
     allowedUpdates.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        (qr as any)[field] = req.body[field];
-      }
+      if (req.body[field] !== undefined) (qr as any)[field] = req.body[field];
     });
 
     const typeDataField = `${qr.qr_type}_data`;
     if (req.body[typeDataField]) {
+      // For presentation: if a new file_url is supplied and there was an old one, delete the old one
+      if (qr.qr_type === "presentation") {
+        const incomingFileUrl = req.body[typeDataField]?.file_url;
+        const existingFileUrl = (qr as any).presentation_data?.file_url;
+
+        if (
+          incomingFileUrl &&
+          existingFileUrl &&
+          incomingFileUrl !== existingFileUrl &&
+          existingFileUrl.includes("cloudinary.com")
+        ) {
+          console.log(`🗑️ Replacing old presentation file: ${existingFileUrl}`);
+          await deletePresentationFromCloudinary(existingFileUrl);
+        }
+      }
+
       (qr as any)[typeDataField] = {
         ...(qr as any)[typeDataField],
         ...req.body[typeDataField],
@@ -593,11 +552,10 @@ export const updateQR = async (
 
     if (qrNeedsRegeneration) {
       const qrDataString = generateQRDataString(qr);
-      const qrCodeImage = await QRService.generateStyledQRCode(
+      qr.qr_code_image = await QRService.generateStyledQRCode(
         qrDataString,
         qr.qr_design,
       );
-      qr.qr_code_image = qrCodeImage;
     }
 
     qr.markModified("qr_design");
@@ -625,9 +583,8 @@ export const updateQR = async (
     });
 
     const response = qr.toObject();
-    if (response.access_settings?.password) {
+    if (response.access_settings?.password)
       delete response.access_settings.password;
-    }
     delete (response as any).daily_scan_fingerprints;
 
     res.status(200).json({
@@ -646,9 +603,7 @@ export const updateQR = async (
   }
 };
 
-/**
- * Delete QR
- */
+// DELETE
 export const deleteQR = async (
   req: Request,
   res: Response,
@@ -658,22 +613,30 @@ export const deleteQR = async (
     const userId = req.user?._id || req.user?.id;
     const { id } = req.params;
 
-    if (!userId) {
+    if (!userId)
       return next({
         statusCode: 401,
         status: "fail",
         message: "User not authenticated",
       } as ErrorResponse);
-    }
 
     const qr = await UnifiedQR.findOneAndDelete({ _id: id, user_id: userId });
-
-    if (!qr) {
+    if (!qr)
       return next({
         statusCode: 404,
         status: "fail",
         message: "QR code not found or unauthorized",
       } as ErrorResponse);
+
+    // If this was a presentation QR and had a Cloudinary-hosted file, clean it up
+    if (qr.qr_type === "presentation") {
+      const fileUrl = (qr as any).presentation_data?.file_url;
+      if (fileUrl && fileUrl.includes("cloudinary.com")) {
+        console.log(
+          `🗑️ Deleting presentation file from Cloudinary on QR delete`,
+        );
+        await deletePresentationFromCloudinary(fileUrl);
+      }
     }
 
     await createActivityLog({
@@ -688,10 +651,9 @@ export const deleteQR = async (
       req,
     });
 
-    res.status(200).json({
-      status: "success",
-      message: "QR code deleted successfully",
-    });
+    res
+      .status(200)
+      .json({ status: "success", message: "QR code deleted successfully" });
   } catch (error) {
     next({
       statusCode: 500,
@@ -702,6 +664,7 @@ export const deleteQR = async (
   }
 };
 
+//ANALYTICS
 export const getQRAnalytics = async (
   req: Request,
   res: Response,
@@ -711,34 +674,29 @@ export const getQRAnalytics = async (
     const userId = req.user?._id || req.user?.id;
     const { id } = req.params;
 
-    if (!userId) {
+    if (!userId)
       return next({
         statusCode: 401,
         status: "fail",
         message: "User not authenticated",
       } as ErrorResponse);
-    }
 
     const qr = await UnifiedQR.findOne({ _id: id, user_id: userId }).select(
       "-daily_scan_fingerprints",
     );
-
-    if (!qr) {
+    if (!qr)
       return next({
         statusCode: 404,
         status: "fail",
         message: "QR code not found",
       } as ErrorResponse);
-    }
 
     res.status(200).json({
       status: "success",
       data: {
         analytics: {
           qr_type: qr.qr_type,
-          // Total raw hits (every request, including duplicates)
           total_hits: qr.scan_count,
-          // Unique device/IP per day — the meaningful engagement metric
           unique_scans: qr.access_settings.current_scans,
           last_scanned_at: qr.last_scanned_at,
           max_scans: qr.access_settings.max_scans,
