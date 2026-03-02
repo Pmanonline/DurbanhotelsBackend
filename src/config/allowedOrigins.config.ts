@@ -3,6 +3,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   " http://10.89.203.99:5173",
+  "https://durbanhotelsbackend.vercel.app",
 ].filter(Boolean);
 
 export default allowedOrigins;
