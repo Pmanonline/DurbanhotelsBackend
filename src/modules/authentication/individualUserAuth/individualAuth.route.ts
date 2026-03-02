@@ -7,13 +7,7 @@ import {
   resendVerificationEmail,
   forgotPassword,
 } from "../individualUserAuth/individualUserAuth.controller";
-import {
-  handleGoogleLogin,
-  initiateTwitterAuth,
-  handleTwitterCallback,
-  handleFacebookLogin,
-  updateTwitterUserEmail,
-} from "../individualUserAuth/socialAuth.controller";
+
 import { asyncHandler } from "../../../middlewares/asyncHandler.middleware";
 import { refreshAccessToken } from "../../../utilities/refreshController";
 
@@ -275,21 +269,6 @@ individualrouter
   .route("/reset-password")
   .post(asyncHandler(resetIndividualPassword));
 
-// SOCIAL ROUTES
-
-individualrouter.route("/google").post(asyncHandler(handleGoogleLogin));
-
-individualrouter.route("/facebook").post(asyncHandler(handleFacebookLogin));
-
-individualrouter
-  .route("/twitter/callback")
-  .post(asyncHandler(handleTwitterCallback));
-
-individualrouter.get("/twitter", initiateTwitterAuth);
-
-individualrouter
-  .route("/update-email")
-  .post(asyncHandler(updateTwitterUserEmail));
 individualrouter.route("/refresh-token").post(asyncHandler(refreshAccessToken));
 
 // refreshToken Route is passed here

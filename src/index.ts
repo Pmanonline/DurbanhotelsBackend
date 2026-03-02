@@ -9,17 +9,14 @@ import connectDB from "./config/dbconn.config";
 import allowedOrigins from "./config/allowedOrigins.config";
 import fileUpload from "express-fileupload";
 
-// QRcodes
-import menuRouter from "./modules/QRCODE/MenuQRcode/MenuQR.route";
-import UnifiedQRRouter from "./modules/QRCODE/UnifiedQRcode/UnifiedQR.route";
-import activityLogRouter from "./modules/QRCODE/Activity_log/ActivityLog.route";
-import MenuFeedbackRouter from "./modules/QRCODE/MenuFeedBack/MenuFeedback.routes";
-
 // Routes
 
 import individualUserAuthRouter from "./modules/authentication/individualUserAuth/individualAuth.route";
 import AdminUserRouter from "./modules/authentication/adminUserAuth/adminAuth.route";
-import userProfileRouter from "./modules/profiles/userProfile.route";
+import menuRoute from "./modules/MENU/Menu.routes";
+import { notificationRouter } from "./modules/Notifications/Notifications.route";
+import { activityLogRouter } from "./modules/Activitylog/Activitylog.routes";
+import RoomRouter from "./modules/ROOMS/Room.routes";
 
 // Middleware
 import deserializeUser from "./middlewares/deserializeUser.middleware";
@@ -28,8 +25,6 @@ import { errorHandlingMiddleware } from "./middlewares/errorHandling.middleware"
 // Swagger config
 import { options as prodOptions } from "./prodSwagger";
 import { options as devOptions } from "./devSwagger";
-import MenuFeedback from "./modules/QRCODE/MenuFeedBack/MenuFeedback.model";
-import uploadRouter from "./modules/QRCODE/UnifiedQRcode/upload.routes";
 
 // Load environment variables
 dotenv.config();
@@ -37,10 +32,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ============================================
 // MIDDLEWARE CONFIGURATION
-// ============================================
-
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -95,40 +87,29 @@ app.use(deserializeUser);
 app.get("/", (req: Request, res: Response) => {
   res.json({
     status: "success",
-    message: "Welcome to QRGenius API",
+    message: "Welcome to durban international hotels  API",
     timestamp: new Date().toISOString(),
   });
 });
 
 app.use("/auth/individual", individualUserAuthRouter);
 app.use("/auth/admin", AdminUserRouter);
-app.use("/qr/menu", menuRouter);
-app.use("/qr/unified", UnifiedQRRouter);
-app.use("/qr/activity", activityLogRouter);
-app.use("/profile", userProfileRouter);
-app.use("/qr/menu-feedback", MenuFeedbackRouter);
-app.use("/upload", uploadRouter);
+app.use("/menu", menuRoute);
+app.use("/notifications", notificationRouter);
+app.use("/activity-logs", activityLogRouter);
+app.use("/", RoomRouter);
 
-// ============================================
 // SWAGGER/API DOCUMENTATION
-// ============================================
-
 const devSpec = swaggerJSDOC(devOptions);
 const prodSpec = swaggerJSDOC(prodOptions);
 
 app.use("/dev-api-docs", swaggerUi.serve, swaggerUi.setup(devSpec));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(prodSpec));
 
-// ============================================
-// ERROR HANDLING (Must be LAST!)
-// ============================================
-
+//  ERROR HANDLING (Must be LAST!)
 app.use(errorHandlingMiddleware);
 
-// ============================================
-// DATABASE CONNECTION & SERVER START
-// ============================================
-
+//  DATABASE CONNECTION & SERVER START``
 const startServer = async () => {
   try {
     await connectDB();

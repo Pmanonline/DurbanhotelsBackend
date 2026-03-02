@@ -1,8 +1,8 @@
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  "https://qr-genius-frontend.vercel.app",
+  "http://localhost:5173",
   "http://localhost:3000",
-  "http://10.94.172.99:3000",
+  " http://10.89.203.99:5173",
 ].filter(Boolean);
 
 export default allowedOrigins;

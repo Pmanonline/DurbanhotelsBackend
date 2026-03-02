@@ -1,13 +1,24 @@
+// middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from "express";
 import { ErrorResponse } from "../utilities/errorHandler.util";
 import jwt from "jsonwebtoken";
-import { AuthenticatedUser } from "../modules/profiles/types";
+import IndividualUser from "../modules/authentication/individualUserAuth/individualUserAuth.model1";
+import AdminUser from "../modules/authentication/adminUserAuth/adminAuth.model";
 
 // Extend Express Request to include user info
 declare global {
   namespace Express {
     interface Request {
-      user?: AuthenticatedUser;
+      user?: {
+        _id: string;
+        id: string;
+        email: string;
+        role: string;
+        session?: string;
+        iat?: number;
+        exp?: number;
+        [key: string]: any; // Allow additional properties
+      };
     }
   }
 }
