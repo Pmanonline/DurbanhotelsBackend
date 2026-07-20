@@ -102,7 +102,7 @@ cloudinary.v2.config({
  */
 const uploadToCloudinary = async (
   file: any,
-  folder = "Durbanhotel/rooms",
+  folder = "Dubanhotel/rooms",
 ): Promise<string> => {
   try {
     if (!file?.tempFilePath) {
