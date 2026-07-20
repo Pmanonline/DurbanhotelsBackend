@@ -5,6 +5,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   "https://Dubanhotels.vercel.app",
   "https://dubanhotelsbackend.vercel.app",
+  "https://durbanhotels.vercel.app/",
   
   // Local development
   "http://localhost:5173",
