@@ -1,4 +1,4 @@
- // config/allowedOrigins.config.js
+  // config/allowedOrigins.config.js
 
 const allowedOrigins = [
   // Production

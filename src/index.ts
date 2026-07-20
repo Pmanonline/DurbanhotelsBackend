@@ -33,73 +33,24 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // MIDDLEWARE CONFIGURATION
-// app.use(
-//   cors({
-//     origin: (origin, callback) => {
-//       if (!origin) return callback(null, true);
-
-//       if (allowedOrigins.includes(origin)) {
-//         callback(null, true);
-//       } else {
-//         console.log("⚠️ CORS blocked origin:", origin);
-//         callback(new Error("Not allowed by CORS"));
-//       }
-//     },
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
-//   }),
-// );
-
-
-//additiional config to accomodate mobile app requests//
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) {
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true);
 
-      // Development: Allow any origin
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`✅ CORS: Allowing development origin: ${origin}`);
-        return callback(null, true);
-      }
-
-      // Production: Check against allowed origins
-      // Ensure allowedOrigins only contains strings
-      const allowedStrings = allowedOrigins.filter(
-        (item): item is string => typeof item === 'string'
-      );
-
-      const isAllowed = allowedStrings.some(pattern => {
-        // Exact match
-        if (pattern === origin) return true;
-        
-        // Wildcard match (if you want to allow subdomains)
-        if (pattern.includes('*')) {
-          const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-          return regex.test(origin);
-        }
-        
-        return false;
-      });
-
-      if (isAllowed) {
-        console.log(`✅ CORS: Allowed origin: ${origin}`);
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log(`❌ CORS: Blocked origin: ${origin}`);
-        console.log(`📋 Allowed origins:`, allowedStrings);
-        callback(new Error('Not allowed by CORS'));
+        console.log("⚠️ CORS blocked origin:", origin);
+        callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Refresh-Token'],
-  })
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
+  }),
 );
+
 // file upload middleware
 app.use(
   fileUpload({
